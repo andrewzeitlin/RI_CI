@@ -56,11 +56,18 @@ program define ri_estimates, rclass
 	gettoken cmd spec : estimator // executing command 
 	gettoken depvar spec : spec  // dependent variable
 	local p = strpos("`spec'", ",")
-	local p0 = `p' - 1
-	local p1 = `p' + 1
+	if `p' == 0 { // if there are no options specified for the estimating command.
+		local p0 = length("`spec'") 
+		local options "" 
+	}
+	else { // if options are specified.
+		local p0 = `p' - 1 // if there are options
+		local p1 = `p' + 1
+		di as err `"Local spec is `spec'"'
+		local options = substr("`spec'",`p1',.) 
+	}
 	local rhs = substr("`spec'", 1,`p0') 
-	local options = substr("`spec'",`p1',.) 
-
+	
 	// Identify interactions in RHS 
 	local rhs = trim(itrim("`rhs'"))
 	local rhs = subinstr("`rhs'", " * ", "*", .) 
@@ -87,7 +94,7 @@ program define ri_estimates, rclass
 	//  Merge randomization(s) into the data 
 	quietly {
 		merge 1:1 `key' using `t1file', nogen assert(3) 
-		if ( `"`t2'"' ~= "" ) merge 1:1 `key' using `t2file', nogen assert(3) 
+		if ( `"`t2'"' ~= "" ) merge 1:1 `key' using `t2file', nogen assert(3) update replace // allowing for the possibility that t_0 is already in the data.
 	}
 
 	//  restrict to sample of interest 
