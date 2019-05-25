@@ -8,7 +8,7 @@ Borrows some ideas from Simon Heb's -ritest-, adapts to our specific problem.
 ___ToDo:___
 (1) collect t-stats
 (2) return point estimates 
-(3) return p-values
+(3) return distribution of test statistic under null, and (optionally) p-values
 (4) allow custom test statistics 
 
 */
@@ -26,13 +26,14 @@ program define ri_estimates, rclass
 		Permutations(integer) /// permutations: number of permutations of (each) treatment vector
 		Key(name) /// key variable for merging treatments onto main dataset
 		t1(string) ///  first dimension of randomization.  Required.
-		pvals(string) /// what to base p-values off of. Must be either b or t.
+		teststat(string) /// what to base p-values off of.
 		[	///
 			t2(string) ///  Second dimension of randomization. Optional. 
+			PVALues /// 		Return p-value
 		]
 
 	//  Checking input 
-	if "`pvals'" ~= "b" & "`pvals'" ~= "t" {
+	if "`teststat'" ~= "b" & "`teststat'" ~= "t" {
 		di as err "Must specify basis for p values as either b or t."
 		exit
 	}
@@ -200,10 +201,11 @@ program define ri_estimates, rclass
 	di as err "Point estimates, analytical SEs"
 	local k = wordcount("`tx' `interaction_vars'")
 
+	//  Results matrix. Definitely collect b,t. Optionally collect p -- that part comes later.
 	tempname RESULTS
-	mat `RESULTS' = J(`k',3,.)
+	mat `RESULTS' = J(`k',2,.)
 	mat rown `RESULTS' = `tx' `interaction_vars' 
-	mat coln `RESULTS' = b t p 
+	mat coln `RESULTS' = b t  
 	`cmd' `depvar' `tx' `interaction_vars' `controls', `options' 
 	ret scalar N = `e(N)' 
 	foreach x in `tx' `interaction_vars' {
@@ -368,27 +370,38 @@ program define ri_estimates, rclass
 		mat `T0' = [`T0', `T12'] 
 	}
 
-	// calculate p-values 
-	drop _all 
-	set obs 0 
-	if "`pvals'" == "b" qui svmat `B0', names(col) 
-	else qui svmat `T0', names(col) 
-	foreach x in  `tx' `interaction_vars' {
-		if "`pvals'" == "b" local teststat = `RESULTS'[rownumb(`RESULTS',"`x'"),1]
-		else local teststat = `RESULTS'[rownumb(`RESULTS',"`x'"),2]
-		qui count if abs(`teststat') < abs(`x')
-		mat `RESULTS'[rownumb(`RESULTS',"`x'"),3] = `r(N)'/`permutations'
-		// local numerator = `r(N)' 
-		// qui count if `x' ~= .
-		// local denominator = `r(N)' 
-		// mat `RESULTS'[rownumb(`RESULTS',"`x'"),3] = `numerator'/`denominator'
+
+	// calculate p-values and return, if requested
+	if "`pvalues'" ~= "" {
+		tempname Pvalues 
+		mat `Pvalues' = J(`k',1,.)
+		mat coln `Pvalues' = p
+		mat rown `Pvalues' = `tx' `interaction_vars' 
+		drop _all 
+		set obs 0 
+		if "`teststat'" == "b" qui svmat `B0', names(col) 
+		else qui svmat `T0', names(col) 
+		foreach x in  `tx' `interaction_vars' {
+			if "`teststat'" == "b" local teststat = `RESULTS'[rownumb(`RESULTS',"`x'"),1]
+			else local teststat = `RESULTS'[rownumb(`RESULTS',"`x'"),2]
+			qui count if abs(`teststat') < abs(`x')
+			mat `Pvalues'[rownumb(`Pvalues',"`x'"),1] = `r(N)'/`permutations'
+			// local numerator = `r(N)' 
+			// qui count if `x' ~= .
+			// local denominator = `r(N)' 
+			// mat `RESULTS'[rownumb(`RESULTS',"`x'"),3] = `numerator'/`denominator'
+		}
+		// Add p-values to results matrix.
+		mat li `Pvalues'
+		mat `RESULTS' = `RESULTS',`Pvalues'
 	}
 
 	// Return results 
-	ret mat RESULTS = `RESULTS' 
 	ret mat B0 = `B0'
 	ret mat T0 = `T0' 
+	ret mat RESULTS = `RESULTS' 
 
+	//  Restore original dataset
 	restore 
 end
 
