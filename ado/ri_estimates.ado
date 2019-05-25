@@ -29,12 +29,17 @@ program define ri_estimates, rclass
 		teststat(string) /// what to base p-values off of.
 		[	///
 			t2(string) ///  Second dimension of randomization. Optional. 
+			POINTestimates ///  Estimate model and return test statistsics for the actual realization of the treatment
 			PVALues /// 		Return p-value
 		]
 
 	//  Checking input 
 	if "`teststat'" ~= "b" & "`teststat'" ~= "t" {
 		di as err "Must specify basis for p values as either b or t."
+		exit
+	}
+	if "`pointestimates'" == "" & "`pvalues'" ~= "" {
+		di as err "Option -pvalues- requires option -pointestimates- to be specified."
 		exit
 	}
 
@@ -125,7 +130,6 @@ program define ri_estimates, rclass
 	// di as err "There are `I' interactions in the model."
 	// di as err "The list of interaction variables is `interaction_vars'"
  	
-
 	//  Containers 
 	tempname B1 T1 // name for matrix to hold results on t1vars below 
 	if `"`t2'"' == "" { // | "`interaction_vars'" == "" {
@@ -198,24 +202,24 @@ program define ri_estimates, rclass
 		}
 	}
 	
-	di as err "Point estimates, analytical SEs"
-	local k = wordcount("`tx' `interaction_vars'")
+	//  Point estimates using actual realization of the treatment
+	if "`pointestimates'" ~= "" {
 
-	//  Results matrix. Definitely collect b,t. Optionally collect p -- that part comes later.
-	tempname RESULTS
-	mat `RESULTS' = J(`k',2,.)
-	mat rown `RESULTS' = `tx' `interaction_vars' 
-	mat coln `RESULTS' = b t  
-	`cmd' `depvar' `tx' `interaction_vars' `controls', `options' 
-	ret scalar N = `e(N)' 
-	foreach x in `tx' `interaction_vars' {
-		mat `RESULTS'[rownumb(`RESULTS',"`x'"),1] = _b[`x']
-		mat `RESULTS'[rownumb(`RESULTS',"`x'"),2] = _b[`x']/_se[`x'] 
+		di as err "Point estimates, analytical SEs"
+		local k = wordcount("`tx' `interaction_vars'")
+
+		//  Results matrix. Definitely collect b,t. Optionally collect p -- that part comes later.
+		tempname RESULTS
+		mat `RESULTS' = J(`k',2,.)
+		mat rown `RESULTS' = `tx' `interaction_vars' 
+		mat coln `RESULTS' = b t  
+		`cmd' `depvar' `tx' `interaction_vars' `controls', `options' 
+		ret scalar N = `e(N)' 
+		foreach x in `tx' `interaction_vars' {
+			mat `RESULTS'[rownumb(`RESULTS',"`x'"),1] = _b[`x']
+			mat `RESULTS'[rownumb(`RESULTS',"`x'"),2] = _b[`x']/_se[`x'] 
+		}
 	}
-
-
-
-
 	save `actuals' //  preserving dataset merged this way in memory to restore at start of each randomization type
 
 	//	Inference:  first dimension of randomization ONLY 
@@ -399,7 +403,7 @@ program define ri_estimates, rclass
 	// Return results 
 	ret mat B0 = `B0'
 	ret mat T0 = `T0' 
-	ret mat RESULTS = `RESULTS' 
+	if ( "`pointestimates'" ~= "" ) ret mat RESULTS = `RESULTS' 
 
 	//  Restore original dataset
 	restore 
