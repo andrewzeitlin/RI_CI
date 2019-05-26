@@ -37,10 +37,10 @@ forvalues r=1/$R {
 save `T0'
 restore 
 
-ri_estimates, permutations($R) key(i) t1(t , filename(`T0')) teststat(t) /* pvalues */ : regress y t
-// mat li r(RESULTS)
-// global tstat = el(r(RESULTS),rownumb(r(RESULTS),"t"),colnumb(r(RESULTS),"t"))
-// global pval  = el(r(RESULTS),rownumb(r(RESULTS),"t"),colnumb(r(RESULTS),"p"))
+ri_estimates, permutations($R) key(i) t1(t , filename(`T0')) teststat(t) pointestimates pvalues : regress y t
+mat li r(RESULTS)
+global tstat = el(r(RESULTS),rownumb(r(RESULTS),"t"),colnumb(r(RESULTS),"t"))
+global pval  = el(r(RESULTS),rownumb(r(RESULTS),"t"),colnumb(r(RESULTS),"p"))
 mat T0 = r(T0)
 di "The t statistic is $tstat, with p-value $pval"
 
@@ -73,5 +73,9 @@ tw (sc yminus y if t_0 == 1, mcolor(red)) ///
     (function y=x , range(-4 4)) /// (line y y, sort) ///
     , legend(order(1 "treated; treatment effect added" 2 "treated; treatment effect subtracted" 3 "control") cols(1)) ///
     ytitle("new outcome") xtitle("actual outcome")
+
+ri_estimates, permutations($R) key(i) t1(t , filename(`T0')) teststat(t) dgp(1) /// imposing the *truth*
+    : regress y t
+mat T0alt = r(T0)
 
 

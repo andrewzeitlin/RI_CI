@@ -6,10 +6,8 @@ Allows specifying a set of parameters for each randomization dimension, or combi
 Borrows some ideas from Simon Heb's -ritest-, adapts to our specific problem.
 
 ___ToDo:___
-(1) collect t-stats
-(2) return point estimates 
-(3) return distribution of test statistic under null, and (optionally) p-values
-(4) allow custom test statistics 
+(*) allow custom test statistics 
+(*) allow non-zero nulls 
 
 */
 program define ri_estimates, rclass 
@@ -31,6 +29,7 @@ program define ri_estimates, rclass
 			t2(string) ///  Second dimension of randomization. Optional. 
 			POINTestimates ///  Estimate model and return test statistsics for the actual realization of the treatment
 			PVALues /// 		Return p-value
+			dgp(string asis) /// list of scalars corresponding to variables in t1(). For now, allowing additive treatment effects only.
 		]
 
 	//  Checking input 
@@ -42,6 +41,10 @@ program define ri_estimates, rclass
 		di as err "Option -pvalues- requires option -pointestimates- to be specified."
 		exit
 	}
+	if (`"`dgp'"' ~= "" ) & `"`t2'"' ~= "" {
+		di as err "Can only specify one of options dgp() and td()."
+		exit 
+	}
 
 	tempfile actuals  //  tempfile for holding dataset with actual randomization in memory
 
@@ -50,6 +53,10 @@ program define ri_estimates, rclass
 	local t1vars `s(txvars)'
 	local t1file `s(txfile)'
 	// display as err `"Assignments for variables `t1vars' can be found in file `t1file'"'
+	//  If DGP() is specified, must have the same number of elements as t1vars
+	if "`dgp'" ~= "" & (wordcount("`t1vars'") ~= wordcount("`dgp'")) {
+		di as err "DGP must have same number of elements (possibly including zeros) as variables listed in option t1()."
+	}
 
 	if `"`t2'"' ~= "" {
 		parse_tx `t2'
@@ -82,12 +89,14 @@ program define ri_estimates, rclass
 	local interactions ""
 	foreach w in `rhs' {
 		// di "Word is: `w'"
-		// check if word is an interaction 
+		// check if word is an interaction. 
 		local p=strpos("`w'", "*")
+		//  if so, file it in the interactions macro
 		if (`p' > 0) local interactions "`interactions' `w'"
 		// otherwise, check if word is in either treatment list
 		else {
 			local p=strpos("`t1vars' `t2vars'", "`w'" )
+			//  if so, assign it to the list of all treatment variables
 			if (`p' > 0 ) local tx "`tx' `w'"
 			// otherwise, assign this variable to list of controls.
 			else local controls "`controls' `w'" 
@@ -150,10 +159,10 @@ program define ri_estimates, rclass
 			}
 		}
 	}
-	local k1 = wordcount("`t1only'") 
-	mat `B1' = J(`permutations', `k1',.) 
+	local K1 = wordcount("`t1only'") 
+	mat `B1' = J(`permutations', `K1',.) 
 	mat coln `B1' = `t1only'
-	mat `T1' = J(`permutations', `k1',.) 
+	mat `T1' = J(`permutations', `K1',.) 
 	mat coln `T1' = `t1only' 
 
 	if `"`t2'"' ~= "" {
@@ -171,10 +180,10 @@ program define ri_estimates, rclass
 				} 
 			}
 		}
-		local k2 = wordcount("`t2only'")
-		mat `B2' = J(`permutations', `k2',.) 
+		local K2 = wordcount("`t2only'")
+		mat `B2' = J(`permutations', `K2',.) 
 		mat coln `B2' = `t2only' 
-		mat `T2' = J(`permutations', `k2',.) 
+		mat `T2' = J(`permutations', `K2',.) 
 		mat coln `T2' = `t2only' 
 	}
 
@@ -206,11 +215,11 @@ program define ri_estimates, rclass
 	if "`pointestimates'" ~= "" {
 
 		di as err "Point estimates, analytical SEs"
-		local k = wordcount("`tx' `interaction_vars'")
+		local K = wordcount("`tx' `interaction_vars'")
 
 		//  Results matrix. Definitely collect b,t. Optionally collect p -- that part comes later.
 		tempname RESULTS
-		mat `RESULTS' = J(`k',2,.)
+		mat `RESULTS' = J(`K',2,.)
 		mat rown `RESULTS' = `tx' `interaction_vars' 
 		mat coln `RESULTS' = b t  
 		`cmd' `depvar' `tx' `interaction_vars' `controls', `options' 
@@ -224,7 +233,22 @@ program define ri_estimates, rclass
 
 	//	Inference:  first dimension of randomization ONLY 
 	di as err "RI: Permutation of T1..."
+
+	tempvar ystar //  this will hold the outcome net of any non-zero sharp null imposed.
+	qui ge `ystar' = .
+	
+	// Extracting parameters for DGP here.
+	tokenize `dgp' 
+	local k = 1 // TODO: check to make sure l.c. `k' is not holding anything important.
+	foreach v in `t1vars' {
+		local `v' = `k' // assign effect of variable `k' to a local variable under its own name.
+		local ++k 
+	}
+
+
 	forvalues p=1/`permutations' {
+
+		//  Bring in the pth assignment. 
 		foreach v in `t1vars' {
 			quietly replace `v' = `v'_`p' 
 		}
@@ -253,7 +277,17 @@ program define ri_estimates, rclass
 				quietly replace `interaction_`i'' = `x1' * `x2' 
 			}
 		}
-		quietly `cmd' `depvar' `tx' `interaction_vars' `controls', `options'
+
+		//  Impose DGP for non-sharp zero nulls. 
+		qui replace `ystar' = `depvar'
+		if `"`dgp'"' ~= "" {
+			foreach k in `t1vars' {
+				qui replace `ystar' = `ystar' + `k'*``k''
+			}
+		}
+
+		//  Extract test statistic 
+		quietly `cmd' `ystar' `tx' `interaction_vars' `controls', `options'
 		foreach v of varlist `t1only' { 
 			mat `B1'[`p',colnumb(`B1',"`v'")] = _b[`v']
 			mat `T1'[`p',colnumb(`T1',"`v'")] = _b[`v']/_se[`v'] 
@@ -378,7 +412,7 @@ program define ri_estimates, rclass
 	// calculate p-values and return, if requested
 	if "`pvalues'" ~= "" {
 		tempname Pvalues 
-		mat `Pvalues' = J(`k',1,.)
+		mat `Pvalues' = J(`K',1,.)
 		mat coln `Pvalues' = p
 		mat rown `Pvalues' = `tx' `interaction_vars' 
 		drop _all 
