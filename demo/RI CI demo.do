@@ -1,5 +1,3 @@
-
-
 //  Some preliminaries for stata
 clear all
 set seed 12345
@@ -22,7 +20,7 @@ global tau = 1
 ge y0 = rnormal()
 ge y1 = y0 + $tau
 
-global R = 200
+global R = 500 //  number of randomizations to consider.
 
 ge t_0 = (runiform() >= 0.5)
 ge y = y0 + t_0*(y1-y0)
@@ -93,18 +91,22 @@ twoway (kdensity tstat) ///
     legend(order(1 "Distribution under sharp null" 2 "Estimate") cols(1) position(11) ring(0))
 restore
 
-capture program drop ri_ci
+//  demo the ri_ci command.
 ri_ci, numtrials(10) permutations($R) ///
     t1(t, filename(`T0') key(i) ) ///
     teststat(t) ///
     dgp(y ~ t ) ///
     ci0( 10 -10) ///
-    : reg y t
+    : reg y t // estimation command delivering the test statistic.
 
+
+//  Visualize results
+di "Trial results in search for upper bound:"
 mat li TRIALS_UB
+di "Trial results in search for lower bound:"
+mat li TRIALS_LB 
 
-
-//  Visualize results 
+preserve
 clear 
 tempfile trials 
 svmat TRIALS_UB, names(col)
@@ -118,3 +120,6 @@ tw sc pvalue tau0 [w=permutations] ///
     , msymbol(oh) ///
     yline(0.025, lcolor(red)) ytitle("p-values") ///
     xline(1, lcolor(blue) lpattern(dash)) ytitle("treatment effect")
+restore 
+
+
