@@ -22,7 +22,7 @@ program define ri_estimates, rclass
 	//  Unpack meta options for ri 
 	syntax [if] [in]  , ///
 		Permutations(integer) /// permutations: number of permutations of (each) treatment vector
-		Key(name) /// key variable for merging treatments onto main dataset
+		/// Key(name) /// key variable for merging treatments onto main dataset
 		t1(string) ///  first dimension of randomization.  Required.
 		teststat(string) /// what to base p-values off of.
 		[	///
@@ -55,12 +55,14 @@ program define ri_estimates, rclass
 	parse_tx `t1'
 	local t1vars `s(txvars)'
 	local t1file `s(txfile)'
+	local t1key `s(keyvar)'
 	// display as err `"Assignments for variables `t1vars' can be found in file `t1file'"'
 
 	if `"`t2'"' ~= "" {
 		parse_tx `t2'
 		local t2vars `s(txvars)' 
 		local t2file `s(txfile)'
+		local t2key `s(keyvar)' 
 		// display as err `"Assignments for variables `t2vars' can be found in file `t2file'"'
 	}
 
@@ -105,10 +107,12 @@ program define ri_estimates, rclass
 	// di as err "RHS: controls are `controls'"
 	// di as err "RHS: interactions are `interactions'"
 
-	//  Merge randomization(s) into the data 
-	quietly {
-		merge 1:1 `key' using `t1file', nogen assert(3) 
-		if ( `"`t2'"' ~= "" ) merge 1:1 `key' using `t2file', nogen assert(3) update replace // allowing for the possibility that t_0 is already in the data.
+	//  Merge randomization(s) into the data, if required. 
+	if "`t1file'" ~= "" {
+		quietly {
+			merge 1:1 `t1key' using `t1file', nogen assert(3) 
+			if ( `"`t2file'"' ~= "" ) merge 1:1 `t2key' using `t2file', nogen assert(3) update replace // allowing for the possibility that t_0 is already in the data.
+		}
 	}
 
 	//  restrict to sample of interest 
@@ -463,9 +467,12 @@ end
 
 // Program to parse lists of treatment dimensions and corresponding variables 
 program define parse_tx , sclass 
-	syntax namelist, filename(string) 
+	syntax namelist, [ filename(string) KEYvar(variable) ] 
 	sreturn local txvars `namelist' 
-	sreturn local txfile `filename' 
+	if "`txfile'" ~= "" {
+		sreturn local txfile `filename' 
+		sreturn local keyvar `keyvar'
+	}
 end
 
 
