@@ -164,8 +164,12 @@ program define ri_ci, rclass
 	//  Let's start by identifying the upper side of the 95% CI.	  
 		//  Evaluate p-value at upper bound.   
 		local tau0 = `ci0_ub'
-		impose_tx, dgp(y ~ t_0 ) treatment(`tau0') y(`y0') subtract 
-		
+		impose_tx, dgp( `dgp' ) treatment(`tau0') y(`y0') subtract 
+		local dgp0 = subinstr(`"`dgp'"', word("`dgp'",1), "`y0'",1) // updating DGP for this to be based on the new dependent variable 
+		local estimator0 = subinstr(`"`estimator'"', "`depvar'" , "`y0'", 1)
+		ri_estimates, permutations(`permutations') t1( `t1' ) ///
+			dgp(`dgp0') treatmenteffect(`tau0')  ///
+			:  `estimator0'
 
 	//  Now identify lower bound of the 95% CI. 
 

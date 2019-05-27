@@ -31,6 +31,7 @@ program define ri_estimates, rclass
 			VALues(string asis) ///  value of test statistic(s), if externally estimated. provide this as a list.
 			PVALues /// 		Return p-value
 			dgp(string asis) /// list of scalars corresponding to variables in t1(). For now, allowing additive treatment effects only.
+			treatmenteffect(numlist max=1) /// treatment effects to be associated with variables on the RHS of DGP.  Passed to impose_tx(). Currently allows only one such (scalar) value. 
 		]
 
 	//  Checking input 
@@ -55,10 +56,6 @@ program define ri_estimates, rclass
 	local t1vars `s(txvars)'
 	local t1file `s(txfile)'
 	// display as err `"Assignments for variables `t1vars' can be found in file `t1file'"'
-	//  If DGP() is specified, must have the same number of elements as t1vars
-	if "`dgp'" ~= "" & (wordcount("`t1vars'") ~= wordcount("`dgp'")) {
-		di as err "DGP must have same number of elements (possibly including zeros) as variables listed in option t1()."
-	}
 
 	if `"`t2'"' ~= "" {
 		parse_tx `t2'
@@ -280,6 +277,10 @@ program define ri_estimates, rclass
 		}
 
 		//  Impose DGP for non-sharp zero nulls. 
+		if `"`dgp'"' == "" qui replace `ystar' = `depvar' // zero null: no dgp specified.
+		else {
+			impose_tx, dgp(`dgp') treatmenteffect(`treatmenteffect') y(`ystar')			
+		}
 		qui replace `ystar' = `depvar'
 		if `"`dgp'"' ~= "" {
 			foreach k in `t1vars' {
