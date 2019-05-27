@@ -179,8 +179,9 @@ program define ri_ci, rclass
 
 	//  Starting values for search for CI, if we're going to be doing that.
 	if "`ci'" ~= "noci" {
+		local testvar = word("`tx' `interaction_vars'", 1) // TODO: need a better source for the SINGULAR variable of interest.
+		local m0 = _b[`testvar'] //  for now, assuming a regression model to initialize.
 		if "`analytic_initial'" ~= "" {
-			local testvar = word("`tx' `interaction_vars'", 1) // TODO: need a better source for the SINGULAR variable of interest.
 			local ci0_ub = _b[`testvar'] + 10*1.96*_se[`testvar'] 
 			local ci0_lb = _b[`testvar'] - 10*1.96*_se[`testvar'] 
 		}
@@ -188,8 +189,11 @@ program define ri_ci, rclass
 			tokenize `ci0' 
 			local ci0_lb = `1' // min(real(word("`ci0'",1)),real(word("`ci0'",2)))
 			local ci0_ub = `2' // max(real(word("`ci0'",1)),real(word("`ci0'",2)))
+			if `ci0_lb' > `m0' | `ci0_ub' < `m0' {
+				di as err "User-specified confidence interval must span point estimate"
+				exit
+			}
 		}
-		local m0 = (`ci0_lb' + `ci0_ub') / 2 
 	}
 
 	****************************************************************************
@@ -209,7 +213,7 @@ program define ri_ci, rclass
 	****************************************************************************
 	if "`ci'" ~= "noci" {
 		tempvar y0 // this will hold the implied `control' outcome under hypothesized treatment effect tau0.  
-		ge `y0' = .
+		qui ge `y0' = .
 
 		tempname TRIALS_LB 
 		tempname TRIALS_UB 
@@ -250,7 +254,7 @@ program define ri_ci, rclass
 			if (`trialno' > 1) mat `TRIALS_UB' = `TRIALS_UB' \ r(THISTRIAL) 
 			else mat `TRIALS_UB' = r(THISTRIAL) 
 			local thispvalue = el(`TRIALS_UB',`trialno',colnumb(`TRIALS_UB',"pvalue"))
-			di "p-value for trial `trialno', treatment `middle', is `thispvalue'"
+			if ("`noisily'" ~= "") di "p-value for trial `trialno', treatment `middle', is `thispvalue'"
 
 			//  update bottom, middle, top depending on outcome above.
 			if (`thispvalue' > `significance_level' / 2 ) local bottom = `middle' //  move right 
@@ -295,7 +299,7 @@ program define ri_ci, rclass
 			if (`trialno' > 1) mat `TRIALS_LB' = `TRIALS_LB' \ r(THISTRIAL) 
 			else mat `TRIALS_LB' = r(THISTRIAL) 
 			local thispvalue = el(`TRIALS_LB',`trialno',colnumb(`TRIALS_LB',"pvalue"))
-			di "p-value for trial `trialno', treatment `middle', is `thispvalue'"
+			if ("`noisily'" ~= "") di "p-value for trial `trialno', treatment `middle', is `thispvalue'"
 
 			//  update bottom, middle, top depending on outcome above. (Note direction of move in response to p-value comparison differs with calculation of UB.)
 			if (`thispvalue' <= `significance_level' / 2 ) local bottom = `middle' //  move right 
