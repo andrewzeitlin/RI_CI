@@ -14,7 +14,7 @@ returns r(UB) and r(LB)
 */
 
 program define ri_ci, rclass
-	//  preserve 
+	preserve 
 
 	//  parse command, with elements passed to ri_estimates().
 	_on_colon_parse `0'
@@ -66,18 +66,6 @@ program define ri_ci, rclass
 		di as err "User must either specify -noci- option or choose one of analytical or user-specified starting value options."
 		exit 
 	}
-
-	//  Declarations 
-
-
-	//  Extract parameters of the search 
-	//  Consider:  start at midpoint of search value?  Or conduct an internal estimate, check that the point estimate is on the interior of the interval, and then use that estimate as the midpoint?  
-	//	For now, will take the midpoint and assume that the starting point for the CI is well chosen.
-	tokenize `ci0' 
-	local ci0_lb = `1' // min(real(word("`ci0'",1)),real(word("`ci0'",2)))
-	local ci0_ub = `2' // max(real(word("`ci0'",1)),real(word("`ci0'",2)))
-	di as err "The suggested starting interval runs from lb `ci0_lb' to ub `ci0_ub'"
-	local m0 = (`ci0_lb' + `ci0_ub') / 2 
 
 	//  Parse t1
 	parse_tx `t1'
@@ -188,6 +176,21 @@ program define ri_ci, rclass
 		di as err "The test statistic for variable `x' is `test_`x''" 
 	}
 
+	//  Starting values for search for CI, if we're going to be doing that.
+	if "`ci'" ~= "noci" {
+		if "`analytic_initial'" ~= "" {
+			local testvar = word("`tx' `interaction_vars'", 1) // TODO: need a better source for the SINGULAR variable of interest.
+			local ci0_ub = _b[`testvar'] + 10*1.96*_se[`testvar'] 
+			local ci0_lb = _b[`testvar'] - 10*1.96*_se[`testvar'] 
+		}
+		else {
+			tokenize `ci0' 
+			local ci0_lb = `1' // min(real(word("`ci0'",1)),real(word("`ci0'",2)))
+			local ci0_ub = `2' // max(real(word("`ci0'",1)),real(word("`ci0'",2)))
+		}
+		local m0 = (`ci0_lb' + `ci0_ub') / 2 
+	}
+
 	****************************************************************************
 	/*  IF REQUESTED, CALCULATE p-VALUE FOR TEST OF ZERO (SHARP) NULL  */
 	****************************************************************************
@@ -205,6 +208,10 @@ program define ri_ci, rclass
 	if "`ci'" ~= "noci" {
 		tempvar y0 // this will hold the implied `control' outcome under hypothesized treatment effect tau0.  
 		ge `y0' = .
+
+		tempname TRIALS_LB 
+		tempname TRIALS_UB 
+
 		local trialno = 0 // counter for trials executed
 
 		//  Let's start by confirming the upper side of the 95% CI, if requested.
@@ -213,10 +220,10 @@ program define ri_ci, rclass
 
 			//  Evaluate p-value at upper bound.   
 			evaluate_trial, dgp(`dgp') treatment(`ci0_ub') y0(`y0') estimator(`estimator') depvar(`depvar') permutations(`permutations') teststat(`teststat') values(`test_`t1vars'') t1vars(`t1vars')
-			mat TRIALS_UB = r(THISTRIAL) // initialize list of trial outcomes for upper bound of 95% CI.
+			mat `TRIALS_UB' = r(THISTRIAL) // initialize list of trial outcomes for upper bound of 95% CI.
 
 			//  Confirm initial value for upper bound of CI is big enough.
-			if el(TRIALS_UB,`trialno',colnumb(TRIALS_UB,"pvalue")) >  `significance_level' / 2 {
+			if el(`TRIALS_UB',`trialno',colnumb(`TRIALS_UB',"pvalue")) >  `significance_level' / 2 {
 				di as err "Initial value for upper bound of CI not big enough.  p-value `thispvalue' associated with treatment effect `tau0'."
 				exit
 			}
@@ -236,9 +243,9 @@ program define ri_ci, rclass
 			evaluate_trial, dgp(`dgp') treatment(`middle') y0(`y0') estimator(`estimator') depvar(`depvar') permutations(`permutations') teststat(`teststat') values(`test_`t1vars'') t1vars(`t1vars')
 
 			//  store results
-			if (`trialno' > 1) mat TRIALS_UB = TRIALS_UB \ r(THISTRIAL) 
-			else mat TRIALS_UB = r(THISTRIAL) 
-			local thispvalue = el(TRIALS_UB,`trialno',colnumb(TRIALS_UB,"pvalue"))
+			if (`trialno' > 1) mat `TRIALS_UB' = `TRIALS_UB' \ r(THISTRIAL) 
+			else mat `TRIALS_UB' = r(THISTRIAL) 
+			local thispvalue = el(`TRIALS_UB',`trialno',colnumb(`TRIALS_UB',"pvalue"))
 			di "p-value for trial `trialno', treatment `middle', is `thispvalue'"
 
 			//  update bottom, middle, top depending on outcome above.
@@ -257,10 +264,10 @@ program define ri_ci, rclass
 			local ++trialno 
 
 			evaluate_trial, dgp(`dgp') treatment(`ci0_lb') y0(`y0') estimator(`estimator') depvar(`depvar') permutations(`permutations') teststat(`teststat') values(`test_`t1vars'') t1vars(`t1vars')
-			mat TRIALS_LB = r(THISTRIAL) // initialize list of trial outcomes for upper bound of 95% CI.
+			mat `TRIALS_LB' = r(THISTRIAL) // initialize list of trial outcomes for upper bound of 95% CI.
 
 			//  Confirm initial value for upper bound of CI is big enough.
-			if el(TRIALS_LB,`trialno',colnumb(TRIALS_LB,"pvalue")) >  `significance_level' / 2 {
+			if el(`TRIALS_LB',`trialno',colnumb(`TRIALS_LB',"pvalue")) >  `significance_level' / 2 {
 				di as err "Initial value for lower bound of CI not small enough.  p-value `thispvalue' associated with treatment effect `tau0'."
 				exit
 			}
@@ -280,9 +287,9 @@ program define ri_ci, rclass
 			evaluate_trial, dgp(`dgp') treatment(`middle') y0(`y0') estimator(`estimator') depvar(`depvar') permutations(`permutations') teststat(`teststat') values(`test_`t1vars'') t1vars(`t1vars')
 
 			//  store results
-			if (`trialno' > 1) mat TRIALS_LB = TRIALS_LB \ r(THISTRIAL) 
-			else mat TRIALS_LB = r(THISTRIAL) 
-			local thispvalue = el(TRIALS_LB,`trialno',colnumb(TRIALS_LB,"pvalue"))
+			if (`trialno' > 1) mat `TRIALS_LB' = `TRIALS_LB' \ r(THISTRIAL) 
+			else mat `TRIALS_LB' = r(THISTRIAL) 
+			local thispvalue = el(`TRIALS_LB',`trialno',colnumb(`TRIALS_LB',"pvalue"))
 			di "p-value for trial `trialno', treatment `middle', is `thispvalue'"
 
 			//  update bottom, middle, top depending on outcome above. (Note direction of move in response to p-value comparison differs with calculation of UB.)
@@ -296,22 +303,23 @@ program define ri_ci, rclass
 		****************************************************************************
 		/*  RETURN OUTPUTS  */
 		****************************************************************************
-		preserve 
+		return mat TRIALS_UB = `TRIALS_UB'
+		return mat TRIALS_LB = `TRIALS_LB' 
+
 		clear 
-		svmat TRIALS_UB, names(col)
+		svmat `TRIALS_UB', names(col)
 		keep if pvalue > `significance_level' / 2 // keeping cases where we did NOT reject
 		qui su tau0 
 		ret local UB = `r(max)'
 
 		clear 
-		svmat TRIALS
+		svmat `TRIALS_LB', names(col)
 		keep if pvalue > `significance_level' / 2 
 		qui su tau0 
 		ret local LB = `r(min)'
 
 	}
-
-	//  restore 
+	restore 
 
 ****************************************************************************
 end

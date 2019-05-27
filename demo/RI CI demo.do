@@ -1,3 +1,5 @@
+
+
 //  Some preliminaries for stata
 clear all
 set seed 12345
@@ -20,7 +22,7 @@ global tau = 1
 ge y0 = rnormal()
 ge y1 = y0 + $tau
 
-global R = 500 //  number of randomizations to consider.
+global R = 100 //  number of randomizations to consider.
 
 ge t_0 = (runiform() >= 0.5)
 ge y = y0 + t_0*(y1-y0)
@@ -122,4 +124,30 @@ tw sc pvalue tau0 [w=permutations] ///
     xline(1, lcolor(blue) lpattern(dash)) ytitle("treatment effect")
 restore 
 
+capture drop t_*
+capture program drop ri_ci
+ri_ci, numtrials(10) permutations($R) ///
+    t1(t, filename(`T0') key(i) ) ///
+    teststat(t) ///
+    dgp(y ~ t ) ///
+    analytic_initial /// ci0( 10 -10) /// noci ///
+    pzero ///
+    : reg y t // estimation command delivering the test statistic.
+ret list 
 
+preserve
+clear 
+tempfile trials 
+svmat TRIALS_UB, names(col)
+save `trials' 
+
+clear 
+svmat TRIALS_LB, names(col)
+append using `trials'
+
+tw sc pvalue tau0 [w=permutations] ///
+    , msymbol(oh) ///
+    yline(0.025, lcolor(red)) ytitle("p-values") ///
+    xline(1, lcolor(blue) lpattern(dash)) ytitle("treatment effect") ///
+    =name(analytic_bounds, replace )
+restore 
