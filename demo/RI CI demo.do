@@ -22,7 +22,7 @@ global tau = 1
 ge y0 = rnormal()
 ge y1 = y0 + $tau
 
-global R = 2000
+global R = 200
 
 ge t_0 = (runiform() >= 0.5)
 ge y = y0 + t_0*(y1-y0)
@@ -106,5 +106,15 @@ mat li TRIALS_UB
 
 //  Visualize results 
 clear 
+tempfile trials 
 svmat TRIALS_UB, names(col)
-tw sc pvalue tau0 [w=permutations], msymbol(oh) yline(0.025, lcolor(red))
+save `trials' 
+
+clear 
+svmat TRIALS_LB, names(col)
+append using `trials'
+
+tw sc pvalue tau0 [w=permutations] ///
+    , msymbol(oh) ///
+    yline(0.025, lcolor(red)) ytitle("p-values") ///
+    xline(1, lcolor(blue) lpattern(dash)) ytitle("treatment effect")

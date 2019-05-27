@@ -9,6 +9,8 @@ ri_ci ///
 	: regress y t 	/// model 
 	, cl(schoolid) /// model options  
 
+	
+returns r(UB) and r(LB)
 */
 
 program define ri_ci, rclass
@@ -175,46 +177,99 @@ program define ri_ci, rclass
 	ge `y0' = .
 
 	//  Let's start by confirming the upper side of the 95% CI.	  
-		local trialno = 1 // counter for successfully executed trials.
+	local trialno = 1 // counter for successfully executed trials.
 
-		//  Evaluate p-value at upper bound.   
-		local tau0 = `ci0_ub'
-		evaluate_trial, dgp(`dgp') treatment(`ci0_ub') y0(`y0') estimator(`estimator') depvar(`depvar') permutations(`permutations') teststat(`teststat') values(`test_`t1vars'') t1vars(`t1vars')
-		mat TRIALS_UB = r(THISTRIAL) // initialize list of trial outcomes for upper bound of 95% CI.
+	//  Evaluate p-value at upper bound.   
+	evaluate_trial, dgp(`dgp') treatment(`ci0_ub') y0(`y0') estimator(`estimator') depvar(`depvar') permutations(`permutations') teststat(`teststat') values(`test_`t1vars'') t1vars(`t1vars')
+	mat TRIALS_UB = r(THISTRIAL) // initialize list of trial outcomes for upper bound of 95% CI.
 
-		//  Confirm initial value for upper bound of CI is big enough.
-		if el(TRIALS_UB,`trialno',colnumb(TRIALS_UB,"pvalue")) >  `significance_level' / 2 {
-			di as err "Initial value for upper bound of CI not big enough.  p-value `thispvalue' associated with treatment effect `tau0'."
-			exit
-		}
+	//  Confirm initial value for upper bound of CI is big enough.
+	if el(TRIALS_UB,`trialno',colnumb(TRIALS_UB,"pvalue")) >  `significance_level' / 2 {
+		di as err "Initial value for upper bound of CI not big enough.  p-value `thispvalue' associated with treatment effect `tau0'."
+		exit
+	}
 
-		//  Figure out next trial.
-		local bottom `m0' 
-		local top `ci0_ub'
-		local middle = 0.5*(`m0' + `ci0_ub') 
+	//  Figure out next trial.
+	local bottom `m0' 
+	local top `ci0_ub'
+	local middle = 0.5*(`m0' + `ci0_ub') 
 
-		//  Loop with number of trials as the stopping rule.
-		while `trialno' < `numtrials' {
-			//  update counter
-			local ++trialno 
+	//  Loop with number of trials as the stopping rule.
+	while `trialno' < `numtrials' {
+		//  update counter
+		local ++trialno 
 
-			//  evaluate current candidate (middle) value
-			evaluate_trial, dgp(`dgp') treatment(`middle') y0(`y0') estimator(`estimator') depvar(`depvar') permutations(`permutations') teststat(`teststat') values(`test_`t1vars'') t1vars(`t1vars')
+		//  evaluate current candidate (middle) value
+		evaluate_trial, dgp(`dgp') treatment(`middle') y0(`y0') estimator(`estimator') depvar(`depvar') permutations(`permutations') teststat(`teststat') values(`test_`t1vars'') t1vars(`t1vars')
 
-			//  store results
-			mat TRIALS_UB = TRIALS_UB \ r(THISTRIAL) 
-			local thispvalue = el(TRIALS_UB,`trialno',colnumb(TRIALS_UB,"pvalue"))
-			di "p-value for trial `trialno', treatment `middle', is `thispvalue'"
+		//  store results
+		mat TRIALS_UB = TRIALS_UB \ r(THISTRIAL) 
+		local thispvalue = el(TRIALS_UB,`trialno',colnumb(TRIALS_UB,"pvalue"))
+		di "p-value for trial `trialno', treatment `middle', is `thispvalue'"
 
-			//  update bottom, middle, top depending on outcome above.
-			if (`thispvalue' > `significance_level' / 2 ) local bottom = `middle' //  move right 
-			else local top = `middle' // move left.
-			local middle = 0.5*(`bottom' + `top') // next trial value.
-		}
+		//  update bottom, middle, top depending on outcome above.
+		if (`thispvalue' > `significance_level' / 2 ) local bottom = `middle' //  move right 
+		else local top = `middle' // move left.
+		local middle = 0.5*(`bottom' + `top') // next trial value.
+	}
 
-		//  TODO:  loop with step size as stopping rule.
+	//  TODO:  loop with step size as stopping rule.
 
 	//  Now identify lower bound of the 95% CI. 
+	local trialno = 1 // counter for successfully executed trials.
+
+	//  Evaluate p-value at upper bound.   
+	evaluate_trial, dgp(`dgp') treatment(`ci0_lb') y0(`y0') estimator(`estimator') depvar(`depvar') permutations(`permutations') teststat(`teststat') values(`test_`t1vars'') t1vars(`t1vars')
+	mat TRIALS_LB = r(THISTRIAL) // initialize list of trial outcomes for upper bound of 95% CI.
+
+	//  Confirm initial value for upper bound of CI is big enough.
+	if el(TRIALS_LB,`trialno',colnumb(TRIALS_LB,"pvalue")) >  `significance_level' / 2 {
+		di as err "Initial value for lower bound of CI not small enough.  p-value `thispvalue' associated with treatment effect `tau0'."
+		exit
+	}
+
+	//  Figure out next trial.
+	local bottom `ci0_lb'  
+	local top `m0'
+	local middle = 0.5*(`m0' + `ci0_lb') 
+
+	//  Loop with number of trials as the stopping rule.
+	while `trialno' < `numtrials' {
+		//  update counter
+		local ++trialno 
+
+		//  evaluate current candidate (middle) value
+		evaluate_trial, dgp(`dgp') treatment(`middle') y0(`y0') estimator(`estimator') depvar(`depvar') permutations(`permutations') teststat(`teststat') values(`test_`t1vars'') t1vars(`t1vars')
+
+		//  store results
+		mat TRIALS_LB = TRIALS_LB \ r(THISTRIAL) 
+		local thispvalue = el(TRIALS_LB,`trialno',colnumb(TRIALS_LB,"pvalue"))
+		di "p-value for trial `trialno', treatment `middle', is `thispvalue'"
+
+		//  update bottom, middle, top depending on outcome above. (Note direction of move in response to p-value comparison differs with calculation of UB.)
+		if (`thispvalue' <= `significance_level' / 2 ) local bottom = `middle' //  move right 
+		else local top = `middle' // move left.
+		local middle = 0.5*(`bottom' + `top') // next trial value.
+	}
+
+
+
+	****************************************************************************
+	/*  RETURN OUTPUTS  */
+	****************************************************************************
+	preserve 
+	clear 
+	svmat TRIALS_UB, names(col)
+	keep if pvalue > `significance_level' / 2 // keeping cases where we did NOT reject
+	qui su tau0 
+	ret local UB = `r(max)'
+
+	clear 
+	svmat TRIALS
+	keep if pvalue > `significance_level' / 2 
+	qui su tau0 
+	ret local LB = `r(min)'
+
 
 	//  restore 
 
