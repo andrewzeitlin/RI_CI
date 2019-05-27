@@ -32,6 +32,7 @@ program define ri_estimates, rclass
 			PVALues /// 		Return p-value
 			dgp(string asis) /// list of scalars corresponding to variables in t1(). For now, allowing additive treatment effects only.
 			treatmenteffect(numlist max=1) /// treatment effects to be associated with variables on the RHS of DGP.  Passed to impose_tx(). Currently allows only one such (scalar) value. 
+			noisily ///  extra diagnostics
 		]
 
 	//  Checking input 
@@ -231,10 +232,10 @@ program define ri_estimates, rclass
 			mat `RESULTS'[rownumb(`RESULTS',"`x'"),2] = _b[`x']/_se[`x'] 
 		}
 	}
-	save `actuals' //  preserving dataset merged this way in memory to restore at start of each randomization type
+	qui save `actuals' //  preserving dataset merged this way in memory to restore at start of each randomization type
 
 	//	Inference:  first dimension of randomization ONLY 
-	di as err "RI: Permutation of T1..."
+	if ("`noisily'" ~= "" ) di as err "RI: Permutation of T1..."
 
 	tempvar ystar //  this will hold the outcome net of any non-zero sharp null imposed.
 	qui ge `ystar' = .
@@ -299,7 +300,6 @@ program define ri_estimates, rclass
 			mat `T1'[`p',colnumb(`T1',"`v'")] = _b[`v']/_se[`v'] 
 		}
 	}
-	di as err "... done."
 	// mat li `B1' 
 
 
@@ -424,10 +424,12 @@ program define ri_estimates, rclass
 		mat rown `Pvalues' = `tx' `interaction_vars' 
 		
 		// Save RI results to Stata's data in memory
-		drop _all 
-		set obs 0 
-		if "`teststat'" == "b" qui svmat `B0', names(col) 
-		else qui svmat `T0', names(col) 
+		quietly {
+			drop _all 
+			set obs 0 
+			if "`teststat'" == "b" svmat `B0', names(col) 
+			else svmat `T0', names(col) 
+		}
 
 		//  Foreach variable about which RI is conducted, compute p-value.
 		local k = 1 

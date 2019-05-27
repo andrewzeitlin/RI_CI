@@ -36,6 +36,7 @@ program define ri_ci, rclass
 			SIGnificance_level(real 0.05) /// significance level for CI.
 			PZero ///  option to provide pvalue for test of zero null.
 			CHECKboundary ///  option to confirm that we reject the null at the initial extremes of the parameter space. If fails, need a bigger search range.
+			noisily /// report p-values and progress for each trial when computing CIs.
 		] 
 
 
@@ -198,7 +199,8 @@ program define ri_ci, rclass
 		tempvar y0zero
 		ge `y0zero' = .
 		evaluate_trial, dgp(`dgp') treatment(0) y0(`y0zero') estimator(`estimator') depvar(`depvar') ///
-			permutations(`permutations') teststat(`teststat') values(`test_`t1vars'') t1vars(`t1vars') 
+			permutations(`permutations') teststat(`teststat') values(`test_`t1vars'') t1vars(`t1vars') ///
+			`noisily'
 		ret scalar pzero = el(r(THISTRIAL),1,colnumb(r(THISTRIAL),"pvalue"))
 	}
 
@@ -219,7 +221,8 @@ program define ri_ci, rclass
 			local ++trialno 
 
 			//  Evaluate p-value at upper bound.   
-			evaluate_trial, dgp(`dgp') treatment(`ci0_ub') y0(`y0') estimator(`estimator') depvar(`depvar') permutations(`permutations') teststat(`teststat') values(`test_`t1vars'') t1vars(`t1vars')
+			evaluate_trial, dgp(`dgp') treatment(`ci0_ub') y0(`y0') estimator(`estimator') depvar(`depvar') permutations(`permutations') teststat(`teststat') values(`test_`t1vars'') t1vars(`t1vars')  ///
+				`noisily'
 			mat `TRIALS_UB' = r(THISTRIAL) // initialize list of trial outcomes for upper bound of 95% CI.
 
 			//  Confirm initial value for upper bound of CI is big enough.
@@ -240,7 +243,8 @@ program define ri_ci, rclass
 			local ++trialno 
 
 			//  evaluate current candidate (middle) value
-			evaluate_trial, dgp(`dgp') treatment(`middle') y0(`y0') estimator(`estimator') depvar(`depvar') permutations(`permutations') teststat(`teststat') values(`test_`t1vars'') t1vars(`t1vars')
+			evaluate_trial, dgp(`dgp') treatment(`middle') y0(`y0') estimator(`estimator') depvar(`depvar') permutations(`permutations') teststat(`teststat') values(`test_`t1vars'') t1vars(`t1vars')  ///
+				`noisily'
 
 			//  store results
 			if (`trialno' > 1) mat `TRIALS_UB' = `TRIALS_UB' \ r(THISTRIAL) 
@@ -263,7 +267,8 @@ program define ri_ci, rclass
 		if "`checkboundary'" ~= "" {
 			local ++trialno 
 
-			evaluate_trial, dgp(`dgp') treatment(`ci0_lb') y0(`y0') estimator(`estimator') depvar(`depvar') permutations(`permutations') teststat(`teststat') values(`test_`t1vars'') t1vars(`t1vars')
+			evaluate_trial, dgp(`dgp') treatment(`ci0_lb') y0(`y0') estimator(`estimator') depvar(`depvar') permutations(`permutations') teststat(`teststat') values(`test_`t1vars'') t1vars(`t1vars')  ///
+				`noisily'
 			mat `TRIALS_LB' = r(THISTRIAL) // initialize list of trial outcomes for upper bound of 95% CI.
 
 			//  Confirm initial value for upper bound of CI is big enough.
@@ -303,9 +308,6 @@ program define ri_ci, rclass
 		****************************************************************************
 		/*  RETURN OUTPUTS  */
 		****************************************************************************
-		return mat TRIALS_UB = `TRIALS_UB'
-		return mat TRIALS_LB = `TRIALS_LB' 
-
 		clear 
 		svmat `TRIALS_UB', names(col)
 		keep if pvalue > `significance_level' / 2 // keeping cases where we did NOT reject
@@ -317,6 +319,9 @@ program define ri_ci, rclass
 		keep if pvalue > `significance_level' / 2 
 		qui su tau0 
 		ret local LB = `r(min)'
+
+		return mat TRIALS_UB = `TRIALS_UB'
+		return mat TRIALS_LB = `TRIALS_LB' 
 
 	}
 	restore 
@@ -333,7 +338,7 @@ end
 //  program to evaluate p-value for non-zero sharp null. Wrapper.
 program define evaluate_trial , rclass
 	
-	syntax, dgp(string asis) t1vars(varname) treatment(real) y0(varname) estimator(string asis) depvar(varname) permutations(integer) teststat(string) values(real) 
+	syntax, dgp(string asis) t1vars(varname) treatment(real) y0(varname) estimator(string asis) depvar(varname) permutations(integer) teststat(string) values(real) [ noisily ]
 
 	impose_tx, dgp( `dgp' ) treatment(`treatment') y(`y0') subtract 
 	local dgp0 = subinstr(`"`dgp'"', word("`dgp'",1), "`y0'",1) // updating DGP for this to be based on the new dependent variable 
@@ -344,7 +349,7 @@ program define evaluate_trial , rclass
 		:  `estimator0'
 
 	local thispvalue = el(r(RESULTS),rownumb(r(RESULTS),"`t1vars'"),colnumb(r(RESULTS),"p"))
-	di as err "The p-value at candidate treatment effect `treatment' on variable `t1vars' is `thispvalue'"
+	if ("`noisily'" ~= "") di as err "The p-value at candidate treatment effect `treatment' on variable `t1vars' is `thispvalue'"
 
 	//  Store results of first trial, and return to calling program.
 	tempname THISTRIAL 

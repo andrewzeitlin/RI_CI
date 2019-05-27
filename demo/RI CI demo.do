@@ -14,6 +14,7 @@ di as err "The current working directory is `pwd'"
 adopath ++`pwd'/ado 
 
 // Force reload of Stata programs
+capture program drop ri_ci
 capture program drop ri_estimates
 capture program drop impose_tx 
 
@@ -22,7 +23,8 @@ global tau = 1
 ge y0 = rnormal()
 ge y1 = y0 + $tau
 
-global R = 100 //  number of randomizations to consider.
+global R = 120 //  number of randomizations to consider.
+global numTrials = 4 // number of trials to run for each of UB, LB
 
 ge t_0 = (runiform() >= 0.5)
 ge y = y0 + t_0*(y1-y0)
@@ -94,13 +96,15 @@ twoway (kdensity tstat) ///
 restore
 
 //  demo the ri_ci command.
-ri_ci, numtrials(10) permutations($R) ///
+ri_ci, numtrials($numTrials) permutations($R) ///
     t1(t, filename(`T0') key(i) ) ///
     teststat(t) ///
     dgp(y ~ t ) ///
     ci0( 10 -10) ///
     : reg y t // estimation command delivering the test statistic.
 
+mat TRIALS_UB = r(TRIALS_UB)
+mat TRIALS_LB = r(TRIALS_LB)
 
 //  Visualize results
 di "Trial results in search for upper bound:"
@@ -121,19 +125,22 @@ append using `trials'
 tw sc pvalue tau0 [w=permutations] ///
     , msymbol(oh) ///
     yline(0.025, lcolor(red)) ytitle("p-values") ///
-    xline(1, lcolor(blue) lpattern(dash)) ytitle("treatment effect")
+    xline(1, lcolor(blue) lpattern(dash)) xtitle("treatment effect") ///
+    name(user_specified, replace )
 restore 
 
 capture drop t_*
 capture program drop ri_ci
-ri_ci, numtrials(10) permutations($R) ///
+ri_ci, numtrials($numTrials) permutations($R) ///
     t1(t, filename(`T0') key(i) ) ///
     teststat(t) ///
     dgp(y ~ t ) ///
     analytic_initial /// ci0( 10 -10) /// noci ///
-    pzero ///
+    /// pzero /// <- to report p-value for zero null
     : reg y t // estimation command delivering the test statistic.
 ret list 
+mat TRIALS_UB = r(TRIALS_UB)
+mat TRIALS_LB = r(TRIALS_LB)
 
 preserve
 clear 
@@ -148,6 +155,10 @@ append using `trials'
 tw sc pvalue tau0 [w=permutations] ///
     , msymbol(oh) ///
     yline(0.025, lcolor(red)) ytitle("p-values") ///
-    xline(1, lcolor(blue) lpattern(dash)) ytitle("treatment effect") ///
-    =name(analytic_bounds, replace )
+    xline(1, lcolor(blue) lpattern(dash)) xtitle("treatment effect") ///
+    name(analytic , replace)
+
 restore 
+
+
+
