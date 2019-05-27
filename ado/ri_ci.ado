@@ -169,7 +169,13 @@ program define ri_ci, rclass
 
 	tempvar y0 // this will hold the implied `control' outcome under hypothesized treatment effect tau0.  
 	ge `y0' = .
-	// tempvar ystar //  for any particular treatment permutation p, this will hold the implied observed outcomes under non-zero sharp null tau0 
+
+	// mat TRIALS_UB  // container for results of ALL trials for the UB
+	// mat TRIALS_LB  // container for results of ALL trials for the LB 
+	tempname THISTRIAL // container for result of current trial
+	local colnames "tau0 permutations pvalue"
+	mat `THISTRIAL' = J(1,3,.)
+	mat coln `THISTRIAL' = `colnames' 
 
 	//  Let's start by identifying the upper side of the 95% CI.	  
 		//  Evaluate p-value at upper bound.   
@@ -182,10 +188,29 @@ program define ri_ci, rclass
 			dgp(`dgp0') treatmenteffect(`tau0')  ///
 			:  `estimator0'
 
+		local thispvalue = el(r(RESULTS),rownumb(r(RESULTS),"`t1vars'"),colnumb(r(RESULTS),"p"))
+		di as err "The p-value at candidate treatment effect `tau0' on variable `t1vars' is `thispvalue'"
+
+		//  Store results of first trial.
+		mat `THISTRIAL'[1,1] = `tau0'
+		mat `THISTRIAL'[1,2] = `permutations'
+		mat `THISTRIAL'[1,3] = `thispvalue'
+		mat TRIALS_UB = `THISTRIAL' // initialize list of trial outcomes for upper bound of 95% CI.
+
+		//  Figure out next trial.
+
 	//  Now identify lower bound of the 95% CI. 
 
 	//  restore 
+
+****************************************************************************
 end
+****************************************************************************
+
+
+****************************************************************************
+/*  Sub-functions  */
+****************************************************************************
 
 
 // Program to parse lists of treatment dimensions and corresponding variables 
