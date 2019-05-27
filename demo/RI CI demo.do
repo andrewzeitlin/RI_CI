@@ -22,7 +22,7 @@ global tau = 1
 ge y0 = rnormal()
 ge y1 = y0 + $tau
 
-global R = 100
+global R = 2000
 
 ge t_0 = (runiform() >= 0.5)
 ge y = y0 + t_0*(y1-y0)
@@ -94,6 +94,17 @@ twoway (kdensity tstat) ///
 restore
 
 capture program drop ri_ci
-ri_ci, permutations(20) t1(t, filename(`T0') key(i) ) teststat(t) dgp(y ~ t ) ci0( 10 -10): reg y t
+ri_ci, numtrials(10) permutations($R) ///
+    t1(t, filename(`T0') key(i) ) ///
+    teststat(t) ///
+    dgp(y ~ t ) ///
+    ci0( 10 -10) ///
+    : reg y t
+
+mat li TRIALS_UB
 
 
+//  Visualize results 
+clear 
+svmat TRIALS_UB, names(col)
+tw sc pvalue tau0 [w=permutations], msymbol(oh) yline(0.025, lcolor(red))

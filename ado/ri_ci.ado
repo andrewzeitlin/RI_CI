@@ -27,8 +27,9 @@ program define ri_ci, rclass
 		dgp(string asis) ///
 		ci0(numlist sort min=2 max=2) ///  	For now, require manual specification of ci0
 		[ ///
-			TRIals ///  	number of trials -- one possible stopping rule. 
-			TOLerance(real 0.05) /// 	alternative stopping rule -- as a fraction of the width of the initial guess. Initial version is quite large.
+			NUMTRIals(integer 0) ///  	number of trials -- one possible stopping rule. 
+			TOLerance(real 0) /// 	alternative stopping rule -- as a fraction of the width of the initial guess. Initial version is quite large.
+			SIGnificance_level(real 0.05) /// significance level for CI.
 		] 
 
 
@@ -40,6 +41,9 @@ program define ri_ci, rclass
 	if real(word("`ci0'",1))== . | real(word("`ci0'",2)) == . {
 		di as err "Both initial CI values must be real numbers."
 		exit 
+	}
+	if `numtrials' == 0 & `tolerance' == 0 {
+		di as err "User must specify either a number of trials or a value for the tolerance."
 	}
 
 	//  Declarations 
@@ -73,11 +77,11 @@ program define ri_ci, rclass
 	//  ToDo:  check whether we need to merge in the treatments in order to estimate using the actual assignment--or is the actual assignment variable already present. 
 	//  Require it to be present and then update ri_estimates() to assume this is the case?  
 	if "`t1file'" ~= "" {
-	quietly {
-		merge 1:1 `t1key' using `t1file', nogen assert(3) 
-		if ( `"`t2'"' ~= "" ) merge 1:1 `t2key' using `t2file', nogen assert(3) update replace // allowing for the possibility that t_0 is already in the data.
+		quietly {
+			merge 1:1 `t1key' using `t1file', nogen assert(3) 
+			if ( `"`t2'"' ~= "" ) merge 1:1 `t2key' using `t2file', nogen assert(3) update replace // allowing for the possibility that t_0 is already in the data.
+		}
 	}
-}
 
 	//  restrict to sample of interest 
 	if `"`if'"' ~= "" keep `if' 
@@ -170,34 +174,45 @@ program define ri_ci, rclass
 	tempvar y0 // this will hold the implied `control' outcome under hypothesized treatment effect tau0.  
 	ge `y0' = .
 
-	// mat TRIALS_UB  // container for results of ALL trials for the UB
-	// mat TRIALS_LB  // container for results of ALL trials for the LB 
-	tempname THISTRIAL // container for result of current trial
-	local colnames "tau0 permutations pvalue"
-	mat `THISTRIAL' = J(1,3,.)
-	mat coln `THISTRIAL' = `colnames' 
+	//  Let's start by confirming the upper side of the 95% CI.	  
+		local trialno = 1 // counter for successfully executed trials.
 
-	//  Let's start by identifying the upper side of the 95% CI.	  
 		//  Evaluate p-value at upper bound.   
 		local tau0 = `ci0_ub'
-		impose_tx, dgp( `dgp' ) treatment(`tau0') y(`y0') subtract 
-		local dgp0 = subinstr(`"`dgp'"', word("`dgp'",1), "`y0'",1) // updating DGP for this to be based on the new dependent variable 
-		local estimator0 = subinstr(`"`estimator'"', "`depvar'" , "`y0'", 1)
-		ri_estimates, permutations(`permutations') t1( `t1' ) ///
-			teststat(t) pvalues values(`test_t')  ///
-			dgp(`dgp0') treatmenteffect(`tau0')  ///
-			:  `estimator0'
+		evaluate_trial, dgp(`dgp') treatment(`ci0_ub') y0(`y0') estimator(`estimator') depvar(`depvar') permutations(`permutations') teststat(`teststat') values(`test_`t1vars'') t1vars(`t1vars')
+		mat TRIALS_UB = r(THISTRIAL) // initialize list of trial outcomes for upper bound of 95% CI.
 
-		local thispvalue = el(r(RESULTS),rownumb(r(RESULTS),"`t1vars'"),colnumb(r(RESULTS),"p"))
-		di as err "The p-value at candidate treatment effect `tau0' on variable `t1vars' is `thispvalue'"
-
-		//  Store results of first trial.
-		mat `THISTRIAL'[1,1] = `tau0'
-		mat `THISTRIAL'[1,2] = `permutations'
-		mat `THISTRIAL'[1,3] = `thispvalue'
-		mat TRIALS_UB = `THISTRIAL' // initialize list of trial outcomes for upper bound of 95% CI.
+		//  Confirm initial value for upper bound of CI is big enough.
+		if el(TRIALS_UB,`trialno',colnumb(TRIALS_UB,"pvalue")) >  `significance_level' / 2 {
+			di as err "Initial value for upper bound of CI not big enough.  p-value `thispvalue' associated with treatment effect `tau0'."
+			exit
+		}
 
 		//  Figure out next trial.
+		local bottom `m0' 
+		local top `ci0_ub'
+		local middle = 0.5*(`m0' + `ci0_ub') 
+
+		//  Loop with number of trials as the stopping rule.
+		while `trialno' < `numtrials' {
+			//  update counter
+			local ++trialno 
+
+			//  evaluate current candidate (middle) value
+			evaluate_trial, dgp(`dgp') treatment(`middle') y0(`y0') estimator(`estimator') depvar(`depvar') permutations(`permutations') teststat(`teststat') values(`test_`t1vars'') t1vars(`t1vars')
+
+			//  store results
+			mat TRIALS_UB = TRIALS_UB \ r(THISTRIAL) 
+			local thispvalue = el(TRIALS_UB,`trialno',colnumb(TRIALS_UB,"pvalue"))
+			di "p-value for trial `trialno', treatment `middle', is `thispvalue'"
+
+			//  update bottom, middle, top depending on outcome above.
+			if (`thispvalue' > `significance_level' / 2 ) local bottom = `middle' //  move right 
+			else local top = `middle' // move left.
+			local middle = 0.5*(`bottom' + `top') // next trial value.
+		}
+
+		//  TODO:  loop with step size as stopping rule.
 
 	//  Now identify lower bound of the 95% CI. 
 
@@ -212,6 +227,32 @@ end
 /*  Sub-functions  */
 ****************************************************************************
 
+//  program to evaluate p-value for non-zero sharp null. Wrapper.
+program define evaluate_trial , rclass
+	
+	syntax, dgp(string asis) t1vars(varname) treatment(real) y0(varname) estimator(string asis) depvar(varname) permutations(integer) teststat(string) values(real) 
+
+	impose_tx, dgp( `dgp' ) treatment(`treatment') y(`y0') subtract 
+	local dgp0 = subinstr(`"`dgp'"', word("`dgp'",1), "`y0'",1) // updating DGP for this to be based on the new dependent variable 
+	local estimator0 = subinstr(`"`estimator'"', "`depvar'" , "`y0'", 1)
+	ri_estimates, permutations(`permutations') t1( `t1vars' ) ///
+		teststat(`teststat') pvalues values(`values')  ///
+		dgp(`dgp0') treatmenteffect(`treatment')  ///
+		:  `estimator0'
+
+	local thispvalue = el(r(RESULTS),rownumb(r(RESULTS),"`t1vars'"),colnumb(r(RESULTS),"p"))
+	di as err "The p-value at candidate treatment effect `treatment' on variable `t1vars' is `thispvalue'"
+
+	//  Store results of first trial, and return to calling program.
+	tempname THISTRIAL 
+	mat `THISTRIAL' = J(1,3,.)
+	mat coln `THISTRIAL' = tau0 permutations pvalue 		
+	mat `THISTRIAL'[1,1] = `treatment'
+	mat `THISTRIAL'[1,2] = `permutations'
+	mat `THISTRIAL'[1,3] = `thispvalue'
+	return matrix THISTRIAL = `THISTRIAL'
+
+end
 
 // Program to parse lists of treatment dimensions and corresponding variables 
 program define parse_tx , sclass 
