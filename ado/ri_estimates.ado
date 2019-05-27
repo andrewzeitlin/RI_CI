@@ -40,7 +40,7 @@ program define ri_estimates, rclass
 		exit
 	}
 	if ("`pointestimates'" == "" & "`values'" == "" ) & "`pvalues'" ~= "" {
-		di as err "Option -pvalues- requires EITHER option -pointestimates- OR option -value- to be specified."
+		di as err "Option -pvalues- requires EITHER option -pointestimates- OR option -values- to be specified."
 		exit
 	}
 	if (`"`dgp'"' ~= "" ) & `"`t2'"' ~= "" {
@@ -56,7 +56,7 @@ program define ri_estimates, rclass
 	local t1vars `s(txvars)'
 	local t1file `s(txfile)'
 	local t1key `s(keyvar)'
-	// display as err `"Assignments for variables `t1vars' can be found in file `t1file'"'
+	// display as err `"Assignments for variables `t1vars' can be found in file `t1file' and merged on variable `t1key'"'
 
 	if `"`t2'"' ~= "" {
 		parse_tx `t2'
@@ -467,9 +467,9 @@ end
 
 // Program to parse lists of treatment dimensions and corresponding variables 
 program define parse_tx , sclass 
-	syntax namelist, [ filename(string) KEYvar(variable) ] 
+	syntax namelist, [ filename(string) KEYvar(varname) ] 
 	sreturn local txvars `namelist' 
-	if "`txfile'" ~= "" {
+	if "`filename'" ~= "" {
 		sreturn local txfile `filename' 
 		sreturn local keyvar `keyvar'
 	}

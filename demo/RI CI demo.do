@@ -22,7 +22,7 @@ global tau = 1
 ge y0 = rnormal()
 ge y1 = y0 + $tau
 
-global R = 200
+global R = 100
 
 ge t_0 = (runiform() >= 0.5)
 ge y = y0 + t_0*(y1-y0)
@@ -37,7 +37,8 @@ forvalues r=1/$R {
 save `T0'
 restore 
 
-ri_estimates, permutations($R) key(i) t1(t , filename(`T0')) teststat(t) pointestimates pvalues : regress y t
+capture program drop ri_estimates
+ri_estimates, permutations($R) t1(t , filename(`T0') key(i)) teststat(t) pointestimates pvalues : regress y t
 mat li r(RESULTS)
 global tstat = el(r(RESULTS),rownumb(r(RESULTS),"t"),colnumb(r(RESULTS),"t"))
 global pval  = el(r(RESULTS),rownumb(r(RESULTS),"t"),colnumb(r(RESULTS),"p"))
@@ -74,12 +75,12 @@ tw (sc yminus y if t_0 == 1, mcolor(red)) ///
     , legend(order(1 "treated; treatment effect added" 2 "treated; treatment effect subtracted" 3 "control") cols(1)) ///
     ytitle("new outcome") xtitle("actual outcome")
 
-ri_estimates, permutations($R) key(i) t1(t , filename(`T0'))  dgp(1) /// imposing the *true* DGP
+capture program drop ri_estimates
+ri_estimates, permutations($R) t1(t , filename(`T0') key(i))  dgp(y ~ t) treatmenteffect(1) /// imposing the *true* DGP
     teststat(t) pvalues values($tstat) /// using previously estimated t-statistic to compute a p-value for this sharp null.
     : regress y t
-
-mat li r(RESULTS)
-mat T0alt = r(T0)
+mat li r(RESULTS) // show p-value 
+mat T0alt = r(T0)  // capture distribution of test statistic under sharp null.
 
 // Visualizing result
 preserve
@@ -91,5 +92,8 @@ twoway (kdensity tstat) ///
     xtitle("t-statistics") /// xscale(range($tstat)) /// 
     legend(order(1 "Distribution under sharp null" 2 "Estimate") cols(1) position(11) ring(0))
 restore
+
+capture program drop ri_ci
+ri_ci, permutations(20) t1(t, filename(`T0') key(i) ) teststat(t) dgp(y ~ t ) ci0( 10 -10): reg y t
 
 

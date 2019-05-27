@@ -22,8 +22,7 @@ program define ri_ci, rclass
 	//  unpack meta options for ri_ci	
 	syntax , ///
 		permutations(integer) ///
-		Key(name) /// key variable for merging treatments onto main dataset
-		t1(string) ///  only one dimension of randomization allowed at a time here.
+		t1(string asis) ///  only one dimension of randomization allowed at a time here.  Sub-options (filename() keyvar())
 		teststat(string) /// what to base p-values off of.
 		dgp(string asis) ///
 		ci0(numlist sort min=2 max=2) ///  	For now, require manual specification of ci0
@@ -59,16 +58,26 @@ program define ri_ci, rclass
 	parse_tx `t1'
 	local t1vars `s(txvars)'
 	local t1file `s(txfile)'
-
+	local t1key `s(keyvar)'
 	// ToDo: save data here so that ri_estimates() can bring in t1file again?
 	// Or modify ri_estimates() to make merging of t1file optional?
 
+	if `"`t2'"' ~= "" {
+		parse_tx `t2'
+		local t2vars `s(txvars)' 
+		local t2file `s(txfile)'
+		local t2key `s(keyvar)' 
+		// display as err `"Assignments for variables `t2vars' can be found in file `t2file'"'
+	}
+
 	//  ToDo:  check whether we need to merge in the treatments in order to estimate using the actual assignment--or is the actual assignment variable already present. 
 	//  Require it to be present and then update ri_estimates() to assume this is the case?  
+	if "`t1file'" ~= "" {
 	quietly {
-		merge 1:1 `key' using `t1file', nogen assert(3) 
-		if ( `"`t2'"' ~= "" ) merge 1:1 `key' using `t2file', nogen assert(3) update replace // allowing for the possibility that t_0 is already in the data.
+		merge 1:1 `t1key' using `t1file', nogen assert(3) 
+		if ( `"`t2'"' ~= "" ) merge 1:1 `t2key' using `t2file', nogen assert(3) update replace // allowing for the possibility that t_0 is already in the data.
 	}
+}
 
 	//  restrict to sample of interest 
 	if `"`if'"' ~= "" keep `if' 
@@ -159,7 +168,8 @@ program define ri_ci, rclass
 	****************************************************************************
 
 	tempvar y0 // this will hold the implied `control' outcome under hypothesized treatment effect tau0.  
-	tempvar ystar //  for any particular treatment permutation p, this will hold the implied observed outcomes under non-zero sharp null tau0 
+	ge `y0' = .
+	// tempvar ystar //  for any particular treatment permutation p, this will hold the implied observed outcomes under non-zero sharp null tau0 
 
 	//  Let's start by identifying the upper side of the 95% CI.	  
 		//  Evaluate p-value at upper bound.   
@@ -168,6 +178,7 @@ program define ri_ci, rclass
 		local dgp0 = subinstr(`"`dgp'"', word("`dgp'",1), "`y0'",1) // updating DGP for this to be based on the new dependent variable 
 		local estimator0 = subinstr(`"`estimator'"', "`depvar'" , "`y0'", 1)
 		ri_estimates, permutations(`permutations') t1( `t1' ) ///
+			teststat(t) pvalues values(`test_t')  ///
 			dgp(`dgp0') treatmenteffect(`tau0')  ///
 			:  `estimator0'
 
@@ -179,7 +190,10 @@ end
 
 // Program to parse lists of treatment dimensions and corresponding variables 
 program define parse_tx , sclass 
-	syntax namelist, filename(string) 
+	syntax namelist, [ filename(string) KEYvar(varname) ] 
 	sreturn local txvars `namelist' 
-	sreturn local txfile `filename' 
+	if "`filename'" ~= "" {
+		sreturn local txfile `filename' 
+		sreturn local keyvar `keyvar'
+	}
 end
