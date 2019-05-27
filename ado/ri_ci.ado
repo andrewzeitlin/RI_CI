@@ -215,14 +215,15 @@ program define ri_ci, rclass
 		tempvar y0 // this will hold the implied `control' outcome under hypothesized treatment effect tau0.  
 		qui ge `y0' = .
 
-		tempname TRIALS_LB 
 		tempname TRIALS_UB 
+		tempname TRIALS_LB 
 
 		local trialno = 0 // counter for trials executed
 
 		//  Let's start by confirming the upper side of the 95% CI, if requested.
 		if "`checkboundary'" ~= "" {	  
 			local ++trialno 
+			di "Trial number `trialno'"
 
 			//  Evaluate p-value at upper bound.   
 			evaluate_trial, dgp(`dgp') treatment(`ci0_ub') y0(`y0') estimator(`estimator') depvar(`depvar') permutations(`permutations') teststat(`teststat') values(`test_`t1vars'') t1vars(`t1vars')  ///
@@ -230,8 +231,9 @@ program define ri_ci, rclass
 			mat `TRIALS_UB' = r(THISTRIAL) // initialize list of trial outcomes for upper bound of 95% CI.
 
 			//  Confirm initial value for upper bound of CI is big enough.
-			if el(`TRIALS_UB',`trialno',colnumb(`TRIALS_UB',"pvalue")) >  `significance_level' / 2 {
-				di as err "Initial value for upper bound of CI not big enough.  p-value `thispvalue' associated with treatment effect `tau0'."
+			local thispvalue = el(`TRIALS_UB',`trialno',colnumb(`TRIALS_UB',"pvalue"))
+			if `thispvalue' >  `significance_level' / 2 {
+				di as err "Initial value for upper bound of CI not big enough.  p-value `thispvalue' associated with treatment effect `ci0_ub'."
 				exit
 			}
 		}
@@ -245,6 +247,7 @@ program define ri_ci, rclass
 		while `trialno' < `numtrials' {
 			//  update counter
 			local ++trialno 
+			di "Trial number `trialno'"
 
 			//  evaluate current candidate (middle) value
 			evaluate_trial, dgp(`dgp') treatment(`middle') y0(`y0') estimator(`estimator') depvar(`depvar') permutations(`permutations') teststat(`teststat') values(`test_`t1vars'') t1vars(`t1vars')  ///
@@ -270,13 +273,15 @@ program define ri_ci, rclass
 		//  Evaluate p-value at upper bound.   
 		if "`checkboundary'" ~= "" {
 			local ++trialno 
+			di "Trial number `trialno'"
 
 			evaluate_trial, dgp(`dgp') treatment(`ci0_lb') y0(`y0') estimator(`estimator') depvar(`depvar') permutations(`permutations') teststat(`teststat') values(`test_`t1vars'') t1vars(`t1vars')  ///
 				`noisily'
 			mat `TRIALS_LB' = r(THISTRIAL) // initialize list of trial outcomes for upper bound of 95% CI.
 
 			//  Confirm initial value for upper bound of CI is big enough.
-			if el(`TRIALS_LB',`trialno',colnumb(`TRIALS_LB',"pvalue")) >  `significance_level' / 2 {
+			local thispvalue = el(`TRIALS_LB',`trialno',colnumb(`TRIALS_LB',"pvalue"))
+			if `thispvalue' >  `significance_level' / 2 {
 				di as err "Initial value for lower bound of CI not small enough.  p-value `thispvalue' associated with treatment effect `tau0'."
 				exit
 			}
@@ -291,6 +296,7 @@ program define ri_ci, rclass
 		while `trialno' < `numtrials' {
 			//  update counter
 			local ++trialno 
+			di "Trial number `trialno'"
 
 			//  evaluate current candidate (middle) value
 			evaluate_trial, dgp(`dgp') treatment(`middle') y0(`y0') estimator(`estimator') depvar(`depvar') permutations(`permutations') teststat(`teststat') values(`test_`t1vars'') t1vars(`t1vars')
