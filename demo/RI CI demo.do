@@ -74,8 +74,22 @@ tw (sc yminus y if t_0 == 1, mcolor(red)) ///
     , legend(order(1 "treated; treatment effect added" 2 "treated; treatment effect subtracted" 3 "control") cols(1)) ///
     ytitle("new outcome") xtitle("actual outcome")
 
-ri_estimates, permutations($R) key(i) t1(t , filename(`T0')) teststat(t) dgp(1) /// imposing the *truth*
+ri_estimates, permutations($R) key(i) t1(t , filename(`T0'))  dgp(1) /// imposing the *true* DGP
+    teststat(t) pvalues values($tstat) /// using previously estimated t-statistic to compute a p-value for this sharp null.
     : regress y t
+
+mat li r(RESULTS)
 mat T0alt = r(T0)
+
+// Visualizing result
+preserve
+drop _all 
+qui svmat T0alt, names(tstat)
+twoway (kdensity tstat) ///
+    (scatteri 0.4 $tstat 0 $tstat, recast(line) lcolor(blue) lpattern(dash)) ///
+    , /// xline($tstat, lcolor(blue))  ///
+    xtitle("t-statistics") /// xscale(range($tstat)) /// 
+    legend(order(1 "Distribution under sharp null" 2 "Estimate") cols(1) position(11) ring(0))
+restore
 
 

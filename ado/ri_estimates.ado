@@ -28,6 +28,7 @@ program define ri_estimates, rclass
 		[	///
 			t2(string) ///  Second dimension of randomization. Optional. 
 			POINTestimates ///  Estimate model and return test statistsics for the actual realization of the treatment
+			VALues(string asis) ///  value of test statistic(s), if externally estimated. provide this as a list.
 			PVALues /// 		Return p-value
 			dgp(string asis) /// list of scalars corresponding to variables in t1(). For now, allowing additive treatment effects only.
 		]
@@ -37,8 +38,8 @@ program define ri_estimates, rclass
 		di as err "Must specify basis for p values as either b or t."
 		exit
 	}
-	if "`pointestimates'" == "" & "`pvalues'" ~= "" {
-		di as err "Option -pvalues- requires option -pointestimates- to be specified."
+	if ("`pointestimates'" == "" & "`values'" == "" ) & "`pvalues'" ~= "" {
+		di as err "Option -pvalues- requires EITHER option -pointestimates- OR option -value- to be specified."
 		exit
 	}
 	if (`"`dgp'"' ~= "" ) & `"`t2'"' ~= "" {
@@ -47,6 +48,7 @@ program define ri_estimates, rclass
 	}
 
 	tempfile actuals  //  tempfile for holding dataset with actual randomization in memory
+	tempname RESULTS  //  tempname for matrix holding results (b,t,p, etc.)
 
 	//  Unpacking treatment variables and corresponding assignments 
 	parse_tx `t1'
@@ -210,15 +212,14 @@ program define ri_estimates, rclass
 			quietly gen `interaction_`i'' = `x1' * `x2' 
 		}
 	}
+	local K = wordcount("`tx' `interaction_vars'")
 	
 	//  Point estimates using actual realization of the treatment
 	if "`pointestimates'" ~= "" {
 
 		di as err "Point estimates, analytical SEs"
-		local K = wordcount("`tx' `interaction_vars'")
 
 		//  Results matrix. Definitely collect b,t. Optionally collect p -- that part comes later.
-		tempname RESULTS
 		mat `RESULTS' = J(`K',2,.)
 		mat rown `RESULTS' = `tx' `interaction_vars' 
 		mat coln `RESULTS' = b t  
@@ -411,33 +412,49 @@ program define ri_estimates, rclass
 
 	// calculate p-values and return, if requested
 	if "`pvalues'" ~= "" {
+		//  Container
 		tempname Pvalues 
 		mat `Pvalues' = J(`K',1,.)
 		mat coln `Pvalues' = p
 		mat rown `Pvalues' = `tx' `interaction_vars' 
+		
+		// Save RI results to Stata's data in memory
 		drop _all 
 		set obs 0 
 		if "`teststat'" == "b" qui svmat `B0', names(col) 
 		else qui svmat `T0', names(col) 
+
+		//  Foreach variable about which RI is conducted, compute p-value.
+		local k = 1 
 		foreach x in  `tx' `interaction_vars' {
-			if "`teststat'" == "b" local teststat = `RESULTS'[rownumb(`RESULTS',"`x'"),1]
-			else local teststat = `RESULTS'[rownumb(`RESULTS',"`x'"),2]
+			// If values of test statistic were provided rather than estimated, these are the default.
+			if ("`values'" ~= "") local teststat = word("`values'",`k')
+			else {
+				if "`teststat'" == "b" local teststat = `RESULTS'[rownumb(`RESULTS',"`x'"),1]
+				else local teststat = `RESULTS'[rownumb(`RESULTS',"`x'"),2]
+			}
 			qui count if abs(`teststat') < abs(`x')
-			mat `Pvalues'[rownumb(`Pvalues',"`x'"),1] = `r(N)'/`permutations'
-			// local numerator = `r(N)' 
-			// qui count if `x' ~= .
-			// local denominator = `r(N)' 
-			// mat `RESULTS'[rownumb(`RESULTS',"`x'"),3] = `numerator'/`denominator'
+			qui count if `x' < `teststat' 
+			local p_left = `r(N)' / `permutations' 
+			qui count if `x' > `teststat' 
+			local p_right = `r(N)' / `permutations' 
+
+			mat `Pvalues'[rownumb(`Pvalues',"`x'"),1] = min(2*min(`p_left',`p_right'),1) // following Green Lab SOP. Works for cases where not centered on zero.  
+
+			local ++k
 		}
 		// Add p-values to results matrix.
-		mat li `Pvalues'
-		mat `RESULTS' = `RESULTS',`Pvalues'
+		// mat li `Pvalues'
+		if ( "`pointestimates'" ~= "" ) mat `RESULTS' = `RESULTS',`Pvalues'
+		else mat `RESULTS' = `Pvalues' 
 	}
 
 	// Return results 
 	ret mat B0 = `B0'
 	ret mat T0 = `T0' 
-	if ( "`pointestimates'" ~= "" ) ret mat RESULTS = `RESULTS' 
+	// if ( "`pointestimates'" ~= "" ) ret mat RESULTS = `RESULTS',`Pvalues'
+	// else ret mat RESULTS = `Pvalues'
+	ret mat RESULTS = `RESULTS' 
 
 	//  Restore original dataset
 	restore 
