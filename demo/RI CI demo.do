@@ -1,7 +1,6 @@
-
 //  Some preliminaries for stata
 clear all
-set seed 12345
+set seed 1234567890
 set matsize 11000
 set scheme s1mono
 
@@ -17,7 +16,7 @@ capture program drop ri_ci
 capture program drop ri_estimates
 capture program drop impose_tx 
 
-qui set obs 1000
+qui set obs 500
 ge i = _n // an identifier for observations, used later to merge potential treatments
 global tau = 1
 ge y0 = rnormal()
