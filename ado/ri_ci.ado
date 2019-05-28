@@ -350,13 +350,10 @@ program define evaluate_trial , rclass
 	
 	syntax, dgp(string asis) t1vars(varname) treatment(real) y0(varname) estimator(string asis) depvar(varname) permutations(integer) teststat(string) values(real) [ noisily ]
 
-	impose_tx, dgp( `dgp' ) treatment(`treatment') y(`y0') subtract 
-	local dgp0 = subinstr(`"`dgp'"', word("`dgp'",1), "`y0'",1) // updating DGP for this to be based on the new dependent variable, since ri_estimates() assumes it has y0 in hand.
-	local estimator0 = subinstr(`"`estimator'"', "`depvar'" , "`y0'", 1)
 	ri_estimates, permutations(`permutations') t1( `t1vars' ) ///
 		teststat(`teststat') pvalues values(`values')  ///
-		dgp(`dgp0') treatmenteffect(`treatment')  ///
-		:  `estimator0'
+		dgp(`dgp') treatmenteffect(`treatment')  ///
+		:  `estimator'
 
 	local thispvalue = el(r(RESULTS),rownumb(r(RESULTS),"`t1vars'"),colnumb(r(RESULTS),"p"))
 	if ("`noisily'" ~= "") di as err "The p-value at candidate treatment effect `treatment' on variable `t1vars' is `thispvalue'"

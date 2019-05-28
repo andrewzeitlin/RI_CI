@@ -239,7 +239,15 @@ program define ri_estimates, rclass
 
 	tempvar ystar //  this will hold the outcome net of any non-zero sharp null imposed.
 	qui ge `ystar' = .
-	
+
+	//  If non-zero null / DGP is specified, then subtract hypothesized treatmment effect here.
+	if `"`dgp'"' ~= "" {
+		tempvar y0 
+		qui ge `y0' = .
+		impose_tx, dgp( `dgp' ) treatment(`treatmenteffect') y(`y0') subtract 
+		local dgp0 = subinstr(`"`dgp'"', word("`dgp'",1), "`y0'",1) // updating DGP for this to be based on the new dependent variable, since ri_estimates() assumes it has y0 in hand.
+	}
+
 	forvalues p=1/`permutations' {
 
 		//  Bring in the pth assignment. 
@@ -275,7 +283,7 @@ program define ri_estimates, rclass
 		//  Impose DGP for non-sharp zero nulls. 
 		if `"`dgp'"' == "" qui replace `ystar' = `depvar' // zero null: no dgp specified.
 		else {
-			impose_tx, dgp(`dgp') treatmenteffect(`treatmenteffect') y(`ystar')			
+			impose_tx, dgp(`dgp0') treatmenteffect(`treatmenteffect') y(`ystar')	
 		}
 
 		//  Extract test statistic 
