@@ -226,8 +226,14 @@ program define ri_ci, rclass
 			di "Trial number `trialno'"
 
 			//  Evaluate p-value at upper bound.   
-			evaluate_trial, dgp(`dgp') treatment(`ci0_ub') y0(`y0') estimator(`estimator') depvar(`depvar') permutations(`permutations') teststat(`teststat') values(`test_`t1vars'') t1vars(`t1vars')  ///
-				`noisily'
+			evaluate_trial, dgp(`dgp') treatment(`ci0_ub') y0(`y0') ///
+			estimator(`estimator') depvar(`depvar') ///
+			permutations(`permutations') ///
+			teststat(`teststat') values(`test_`t1vars'') ///
+			t1vars(`t1vars')  ///
+			`righttail' ///
+			`noisily'
+
 			mat `TRIALS_UB' = r(THISTRIAL) // initialize list of trial outcomes for upper bound of 95% CI.
 
 			//  Confirm initial value for upper bound of CI is big enough.
@@ -250,8 +256,11 @@ program define ri_ci, rclass
 			di "Trial number `trialno'"
 
 			//  evaluate current candidate (middle) value
-			evaluate_trial, dgp(`dgp') treatment(`middle') y0(`y0') estimator(`estimator') depvar(`depvar') permutations(`permutations') teststat(`teststat') values(`test_`t1vars'') t1vars(`t1vars')  ///
-				`noisily'
+			evaluate_trial, dgp(`dgp') treatment(`middle') y0(`y0') ///
+				estimator(`estimator') depvar(`depvar') t1vars(`t1vars')  ///
+				permutations(`permutations') teststat(`teststat') values(`test_`t1vars'') ///
+				`righttail' /// <-- for UB, look at right-tailed test only (assumes regression model)
+				`noisily' ///
 
 			//  store results
 			if (`trialno' > 1) mat `TRIALS_UB' = `TRIALS_UB' \ r(THISTRIAL) 
@@ -276,6 +285,7 @@ program define ri_ci, rclass
 			di "Trial number `trialno'"
 
 			evaluate_trial, dgp(`dgp') treatment(`ci0_lb') y0(`y0') estimator(`estimator') depvar(`depvar') permutations(`permutations') teststat(`teststat') values(`test_`t1vars'') t1vars(`t1vars')  ///
+				`lefttail' /// 
 				`noisily'
 			mat `TRIALS_LB' = r(THISTRIAL) // initialize list of trial outcomes for upper bound of 95% CI.
 
@@ -299,7 +309,9 @@ program define ri_ci, rclass
 			di "Trial number `trialno'"
 
 			//  evaluate current candidate (middle) value
-			evaluate_trial, dgp(`dgp') treatment(`middle') y0(`y0') estimator(`estimator') depvar(`depvar') permutations(`permutations') teststat(`teststat') values(`test_`t1vars'') t1vars(`t1vars')
+			evaluate_trial, dgp(`dgp') treatment(`middle') y0(`y0') ///
+				estimator(`estimator') depvar(`depvar') t1vars(`t1vars') ///
+				permutations(`permutations') teststat(`teststat') values(`test_`t1vars'') `lefttail'
 
 			//  store results
 			if (`trialno' > 1) mat `TRIALS_LB' = `TRIALS_LB' \ r(THISTRIAL) 
@@ -348,11 +360,12 @@ end
 //  program to evaluate p-value for non-zero sharp null. Wrapper.
 program define evaluate_trial , rclass
 	
-	syntax, dgp(string asis) t1vars(varname) treatment(real) y0(varname) estimator(string asis) depvar(varname) permutations(integer) teststat(string) values(real) [ noisily ]
+	syntax, dgp(string asis) t1vars(varname) treatment(real) y0(varname) estimator(string asis) depvar(varname) permutations(integer) teststat(string) values(real) [ noisily righttail lefttail ]
 
 	ri_estimates, permutations(`permutations') t1( `t1vars' ) ///
 		teststat(`teststat') pvalues values(`values')  ///
 		dgp(`dgp') treatmenteffect(`treatment')  ///
+		`righttail' `lefttail' /// 
 		:  `estimator'
 
 	local thispvalue = el(r(RESULTS),rownumb(r(RESULTS),"`t1vars'"),colnumb(r(RESULTS),"p"))
