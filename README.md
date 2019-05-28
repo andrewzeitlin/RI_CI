@@ -1,7 +1,7 @@
 # RI_CI
 
-Package to provide randomization inference-based confidence intervals.
+Package to provide randomization inference-based $p$-values and Fisher confidence intervals.  Draws substantially on Simon Heb's `ritest`.
 
-See 
-- [overview notebook](RI CIs.ipynb) for motivation; and 
-- [demo notebook](demo/RI CI demo.ipynb) for usage.
+See explanation and usage in the [demo notebook](demo/RI CI demo.ipynb).
+
+
