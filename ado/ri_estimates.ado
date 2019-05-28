@@ -286,12 +286,6 @@ program define ri_estimates, rclass
 		else {
 			impose_tx, dgp(`dgp') treatmenteffect(`treatmenteffect') y(`ystar')			
 		}
-		qui replace `ystar' = `depvar'
-		if `"`dgp'"' ~= "" {
-			foreach k in `t1vars' {
-				qui replace `ystar' = `ystar' + `k'*``k''
-			}
-		}
 
 		//  Extract test statistic 
 		quietly `cmd' `ystar' `tx' `interaction_vars' `controls', `options'
