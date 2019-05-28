@@ -351,7 +351,7 @@ program define evaluate_trial , rclass
 	syntax, dgp(string asis) t1vars(varname) treatment(real) y0(varname) estimator(string asis) depvar(varname) permutations(integer) teststat(string) values(real) [ noisily ]
 
 	impose_tx, dgp( `dgp' ) treatment(`treatment') y(`y0') subtract 
-	local dgp0 = subinstr(`"`dgp'"', word("`dgp'",1), "`y0'",1) // updating DGP for this to be based on the new dependent variable 
+	local dgp0 = subinstr(`"`dgp'"', word("`dgp'",1), "`y0'",1) // updating DGP for this to be based on the new dependent variable, since ri_estimates() assumes it has y0 in hand.
 	local estimator0 = subinstr(`"`estimator'"', "`depvar'" , "`y0'", 1)
 	ri_estimates, permutations(`permutations') t1( `t1vars' ) ///
 		teststat(`teststat') pvalues values(`values')  ///
@@ -372,12 +372,3 @@ program define evaluate_trial , rclass
 
 end
 
-// Program to parse lists of treatment dimensions and corresponding variables 
-program define parse_tx , sclass 
-	syntax namelist, [ filename(string) KEYvar(varname) ] 
-	sreturn local txvars `namelist' 
-	if "`filename'" ~= "" {
-		sreturn local txfile `filename' 
-		sreturn local keyvar `keyvar'
-	}
-end
