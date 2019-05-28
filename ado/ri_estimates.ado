@@ -32,6 +32,8 @@ program define ri_estimates, rclass
 			PVALues /// 		Return p-value
 			dgp(string asis) /// list of scalars corresponding to variables in t1(). For now, allowing additive treatment effects only.
 			treatmenteffect(numlist max=1) /// treatment effects to be associated with variables on the RHS of DGP.  Passed to impose_tx(). Currently allows only one such (scalar) value. 
+			RIGHTtail ///  one-sided test: p(t > \hat{t}).  Default is two-sided.
+			LEFTtail ///  one-sided test: p(t < \hat{t}). Default is two-sided
 			noisily ///  extra diagnostics
 		]
 
@@ -46,6 +48,11 @@ program define ri_estimates, rclass
 	}
 	if (`"`dgp'"' ~= "" ) & `"`t2'"' ~= "" {
 		di as err "Can only specify one of options dgp() and td()."
+		exit 
+	}
+	if "`righttail'" ~= "" & "`lefttail'" ~= "" {
+		di as err "Can only specify ONE of options -righttail- or -lefttail-."
+		di as err "Omit both for (default) two-sided test."
 		exit 
 	}
 
@@ -434,13 +441,23 @@ program define ri_estimates, rclass
 				else local teststat = `RESULTS'[rownumb(`RESULTS',"`x'"),2]
 			}
 			qui count if abs(`teststat') < abs(`x')
-			qui count if `x' < `teststat' 
-			local p_left = `r(N)' / `permutations' 
-			qui count if `x' > `teststat' 
-			local p_right = `r(N)' / `permutations' 
-
-			mat `Pvalues'[rownumb(`Pvalues',"`x'"),1] = min(2*min(`p_left',`p_right'),1) // following Green Lab SOP. Works for cases where not centered on zero.  
-
+			if "`righttail'" == "" {
+				qui count if `x' < `teststat' 
+				local p_left = `r(N)' / `permutations'
+			}
+			if "`lefttail'" == "" { 
+				qui count if `x' > `teststat' 
+				local p_right = `r(N)' / `permutations' 
+			}
+			if "`righttail'" ~= "" {
+				mat `Pvalues'[rownumb(`Pvalues',"`x'"),1] = `p_right' 
+			}
+			else if "`lefttail'" ~= "" {
+				mat `Pvalues'[rownumb(`Pvalues',"`x'"),1] = `p_left' 
+			}
+			else {
+				mat `Pvalues'[rownumb(`Pvalues',"`x'"),1] = min(2*min(`p_left',`p_right'),1) // following Green Lab SOP. Works for cases where not centered on zero.  
+			}
 			local ++k
 		}
 		// Add p-values to results matrix.
