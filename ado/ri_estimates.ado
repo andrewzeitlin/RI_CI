@@ -240,15 +240,6 @@ program define ri_estimates, rclass
 	tempvar ystar //  this will hold the outcome net of any non-zero sharp null imposed.
 	qui ge `ystar' = .
 	
-	// Extracting parameters for DGP here.
-	tokenize `dgp' 
-	local k = 1 // TODO: check to make sure l.c. `k' is not holding anything important.
-	foreach v in `t1vars' {
-		local `v' = `k' // assign effect of variable `k' to a local variable under its own name.
-		local ++k 
-	}
-
-
 	forvalues p=1/`permutations' {
 
 		//  Bring in the pth assignment. 
