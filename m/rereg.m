@@ -35,11 +35,12 @@ function beta_re = rereg(y,x,g)
     K = size(x,2); 
 
     %  If adding a constant term to x increases its rank, do so
-    if rank([ones(N,1), x]) > rank(x) 
-        x = [ones(N,1),x];
+    %  ToDo:  replace use of rank() function with something more efficient for large matrices.
+    if rank([x,ones(N,1)]) > rank(x) 
+        x = [x,ones(N,1)];
     end
 
-
+    %  Group stats, demeaned outcomes, mean outcomes
     T_g = grpstats(ones(N,1),g,'sum'); % Count of observations in each group
 	ybar_g = grpstats(y,g); %  Group mean of y
     xbar_g = grpstats(x,g); %  Group mean of x
@@ -51,21 +52,11 @@ function beta_re = rereg(y,x,g)
     
     %  Remove linearly dependent variables from xhat. NB we will not be
     %  looking at coefficients directly so don't care about ordering.
-    %  xvaries = ( std(xhat) >= tol );     %  indicator for elements of x that vary within groups
-    %     [xmin, xmax] = grpstats(x,g,{'min','max'}); 
-    %     xvaries = (sum(xmin ~= xmax) > 0 );
-    %     xhat = xhat(:,xvaries); %- repmat(xbarbar(xvaries),N,1) ;
-    %  Not convinced we should subtract the above off if we are going to
-    %  run a constant-less regression here.  Already demeaned by group.
     %  Case:  *no* within-group variation in RHS variablese.
-    if sum(sum(xhat==0)) == size(xhat,1)*size(xhat,2)
+    if ~nnz(xhat)  % Case: xhat is all zeros. Don't bother with licols, it will return an empty matrix. Instead, replace with a constant. 
         xhat = ones(N,1);
     else
-        xhat = licols(xhat,tol); 
-        %  Confirm that a constant would not be linearly dependent before adding.
-        % if rank([ones(N,1),xhat]) > rank(xhat) 
-        %     xhat = [ones(N,1), xhat ];
-        % end
+        xhat = licols(xhat); 
     end
 
     %  Remove linearly dependent columns from dataset of group means, xbar_g.
@@ -82,7 +73,7 @@ function beta_re = rereg(y,x,g)
     
     %  1.  Within estimate
     beta_w = [ ... 
-                xhat ...  % constant term  included in this, if appropriate.
+                xhat ...  %
             ] \ (yhat) ; 
     sigma2e = sum( (yhat - [ ... ones(N,1),  <-- all variables centered on zero so constant term not necessary
             xhat ...
@@ -100,9 +91,8 @@ function beta_re = rereg(y,x,g)
     theta_g = repelem(theta_g,T_g,1); 
     
     %  4.  GLS  
-
-    beta_re = [ ... ones(N,1)- theta_g , ...  constant term is now in x.
-            x - repmat(theta_g,1,K).*repelem(xbar_g,T_g,1) ...  included regressors
+    beta_re = [ ... 
+            x - repmat(theta_g,1,size(xbar_g,2)).*repelem(xbar_g,T_g,1) ...  % included regressors; there is a constant in x.
             ] ...
             \ ...
             ( y - theta_g .* repelem(ybar_g,T_g,1)) ; % transformed outcome
