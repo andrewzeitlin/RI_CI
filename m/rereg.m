@@ -12,6 +12,7 @@ function results = rereg(DATA,yvar,xvars,groupvar)
 	%  Estimation of idiosyncratic error component will follow Stata: 
 	%  https://www.stata.com/manuals13/xtxtreg.pdf#xtxtregMethodsandformulasxtreg%2Cre
 	%  TBD:  simple etimator or Swamy-Arora estimator for etimating \hat{\sigma}^2_{uSA}
+    %  Variance estimation follows Inmaculada C. Álvarez, Javier Barbero, José L. Zofío, http://www.paneldatatoolbox.com
     
     %  Tolerance for claim that there is no within-group variation in some
     %  characteristic 
@@ -35,16 +36,16 @@ function results = rereg(DATA,yvar,xvars,groupvar)
         %     end
     
 	%  0.1.  Group means of outcome and RHS variables
-    G = length(unique(g)); 
-    N = length(y); 
-    K = size(x,2); 
-
     %  If adding a constant term to x increases its rank, do so
     %  ToDo:  replace use of rank() function with something more efficient for large matrices.
+    N = length(y); 
     if rank([x,ones(N,1)]) > rank(x) 
         x = [ones(N,1),x];
         xvars = [{'Constant'},xvars];
     end
+    K = size(x,2); 
+    glist = unique(g); 
+    G = length(glist); 
 
     %  Group stats, demeaned outcomes, mean outcomes
     T_g = grpstats(ones(N,1),g,'sum'); % Count of observations in each group
@@ -52,17 +53,17 @@ function results = rereg(DATA,yvar,xvars,groupvar)
     xbar_g = grpstats(x,g); %  Group mean of x
     ybarbar = mean(ybar_g); % grand mean, weighting *panels* equally.
     xbarbar = mean(xbar_g); % grand means, weighting *panels* equally
-    yhat = demean(y,g); % -ybarbar; % ; % group-wise demeaned outcome, centered on grand mean
-    xhat = demean(x,g); % group-wise demeaned RHS variables, centered on grand mean
+    yddot = demean(y,g); % -ybarbar; % ; % group-wise demeaned outcome, centered on grand mean
+    xddot = demean(x,g); % group-wise demeaned RHS variables, centered on grand mean
 
     
-    %  Remove linearly dependent variables from xhat. NB we will not be
+    %  Remove linearly dependent variables from xddot. NB we will not be
     %  looking at coefficients directly so don't care about ordering.
     %  Case:  *no* within-group variation in RHS variablese.
-    if ~nnz(xhat)  % Case: xhat is all zeros. Don't bother with licols, it will return an empty matrix. Instead, replace with a constant. 
-        xhat = ones(N,1);
+    if ~nnz(xddot)  % Case: xddot is all zeros. Don't bother with licols, it will return an empty matrix. Instead, replace with a constant. 
+        xddot = ones(N,1);
     else
-        xhat = licols(xhat); 
+        xddot = licols(xddot); 
     end
 
     %  Remove linearly dependent columns from dataset of group means, xbar_g.
@@ -79,12 +80,12 @@ function results = rereg(DATA,yvar,xvars,groupvar)
     
     %  1.  Within estimate
     beta_w = [ ... 
-                xhat ...  %
-            ] \ (yhat) ; 
-    sigma2e = sum( (yhat - [ ... ones(N,1),  <-- all variables centered on zero so constant term not necessary
-            xhat ...
+                xddot ...  %
+            ] \ (yddot) ; 
+    sigma2e = sum( (yddot - [ ... ones(N,1),  <-- all variables centered on zero so constant term not necessary
+            xddot ...
             ]*beta_w ).^2 ) ...
-            /(N - G - size(xhat,2) + 1) ; % using count of x variables that have within-group variation, rather than K, as dof adjustment
+            /(N - G - size(xddot,2) + 1) ; % using count of x variables that have within-group variation, rather than K, as dof adjustment
     
 	%  2.  Between estimate
     beta_b = xbar_g_li \ ybar_g ; 
@@ -99,23 +100,39 @@ function results = rereg(DATA,yvar,xvars,groupvar)
     %  4.  GLS  
     x_tr = x - repmat(theta_g,1,size(xbar_g,2)).*repelem(xbar_g,T_g,1);   % included regressors; there is a constant in x.
     y_tr = y - theta_g .* repelem(ybar_g,T_g,1) ; 
-
-    beta_re = x_tr \ y_tr ; [ ... 
-            x - repmat(theta_g,1,size(xbar_g,2)).*repelem(xbar_g,T_g,1) ...  % included regressors; there is a constant in x.
-            ] ...
-            \ ...
-            ( y - theta_g .* repelem(ybar_g,T_g,1)) ; % transformed outcome
+    beta_re = x_tr \ y_tr ; 
     
-    %  For ease of conformity in the calling program, if a constant was not supplied, suppress its coefficient from output.
-    %     if flag_addedconstant == 1 
-    %         beta_re = beta_re(1:end-1); 
-    %     end
-
     %  Compute variance-covariance matrix
+    %  Fitteed values 
+    yhattr = x_tr * beta_re;  
+    yhat   = x * beta_re ; 
+    % Residuals
+    res = y_tr - yhattr;
+    % Inverse of x_tr'x_tr
+    invXtrXtr = ((x_tr'*x_tr)\eye(K));
+    
+    % Residual variance
+    resdf = G - 1;
+    resvar = (res'*res) ./ resdf;
+        
+    %  Variance-covariance matrix (cluster-robust)
+    
+    % Compute total sum
+    total_sum = 0;
+    for gg=1:G;  
+        total_sum = total_sum + x_tr(g==glist(gg),:)'*res(g==glist(gg))*res(g==glist(gg))'*x_tr(g==glist(gg),:);
+    end
+    varcoef = invXtrXtr * total_sum * invXtrXtr; 
+    %  Need degrees of freedom correction?
+    varcoef = (G/(G-1)) * ((N-1)/(N-K)) .* varcoef;
 
     %  Standard errors
+    stderr = sqrt(diag(varcoef));
+    t = beta_re ./ stderr ; 
 
     %  Export results as table
-    results = array2table(beta_re,'VariableNames',{'beta'},'RowNames', xvars);
+    results = array2table([beta_re, stderr, t ] ...
+        , 'VariableNames',{'beta', 'SE', 'tStat'} ...
+        ,'RowNames', xvars);
 end
 
