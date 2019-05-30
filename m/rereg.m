@@ -33,6 +33,13 @@ function beta_re = rereg(y,x,g)
     G = length(unique(g)); 
     N = length(y); 
     K = size(x,2); 
+
+    %  If adding a constant term to x increases its rank, do so
+    if rank([ones(N,1), x]) > rank(x) 
+        x = [ones(N,1),x];
+    end
+
+
     T_g = grpstats(ones(N,1),g,'sum'); % Count of observations in each group
 	ybar_g = grpstats(y,g); %  Group mean of y
     xbar_g = grpstats(x,g); %  Group mean of x
@@ -56,9 +63,9 @@ function beta_re = rereg(y,x,g)
     else
         xhat = licols(xhat,tol); 
         %  Confirm that a constant would not be linearly dependent before adding.
-        if rank([ones(N,1),xhat]) > rank(xhat) 
-            xhat = [ones(N,1), xhat ];
-        end
+        % if rank([ones(N,1),xhat]) > rank(xhat) 
+        %     xhat = [ones(N,1), xhat ];
+        % end
     end
 
     %  Remove linearly dependent columns from dataset of group means, xbar_g.
@@ -69,9 +76,9 @@ function beta_re = rereg(y,x,g)
     end
 
     %  add a constant if doing so would increase rank
-    if rank([xbar_g_li,ones(G,1)]) > rank(xbar_g_li)
-        xbar_g_li = [ones(G,1) xbar_g_li];
-    end
+    % if rank([xbar_g_li,ones(G,1)]) > rank(xbar_g_li)
+    %     xbar_g_li = [ones(G,1) xbar_g_li];
+    % end
     
     %  1.  Within estimate
     beta_w = [ ... 
@@ -93,6 +100,7 @@ function beta_re = rereg(y,x,g)
     theta_g = repelem(theta_g,T_g,1); 
     
     %  4.  GLS  
+
     beta_re = [ ... ones(N,1)- theta_g , ...  constant term is now in x.
             x - repmat(theta_g,1,K).*repelem(xbar_g,T_g,1) ...  included regressors
             ] ...
@@ -103,51 +111,5 @@ function beta_re = rereg(y,x,g)
     %     if flag_addedconstant == 1 
     %         beta_re = beta_re(1:end-1); 
     %     end
-end
-
-function datahat = demean(data,g) 
-    [~, datahat,idx] = aggregate(g, data , @(x) bsxfun(@minus, x, mean(x,1)));
-    [~, isrt] = sort(cat(1, idx{:}));
-    datahat = cat(1, datahat{:});
-    datahat = datahat(isrt,:);    
-end
-
-function [Xsub,idx]=licols(X,tol)
-%Extract a linearly independent set of columns of a given matrix X
-%
-%    [Xsub,idx]=licols(X)
-%
-%in:
-%
-%  X: The given input matrix
-%  tol: A rank estimation tolerance. Default=1e-10
-%
-%out:
-%
-% Xsub: The extracted columns of X
-% idx:  The indices (into X) of the extracted columns
-% Source:  https://www.mathworks.com/matlabcentral/answers/108835-how-to-get-only-linearly-independent-rows-in-a-matrix-or-to-remove-linear-dependency-b-w-rows-in-a-m
-
-    if ~nnz(X) %X has no non-zeros and hence no independent columns
-        Xsub=[]; idx=[];
-        return
-    end
-
-    if nargin<2, tol=1e-10; end
-    [Q, R, E] = qr(X,0); 
-
-    if ~isvector(R)
-        diagr = abs(diag(R));
-    else
-        diagr = R(1);   
-    end
-
-    %Rank estimation
-    r = find(diagr >= tol*diagr(1), 1, 'last'); %rank estimation
-
-    idx=sort(E(1:r));
-
-    Xsub=X(:,idx);                      
-
 end
 
