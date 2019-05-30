@@ -40,6 +40,7 @@ function beta_re = rereg(y,x,g)
     xbarbar = mean(xbar_g); % grand means, weighting *panels* equally
     yhat = demean(y,g); % -ybarbar; % ; % group-wise demeaned outcome, centered on grand mean
     xhat = demean(x,g); % group-wise demeaned RHS variables, centered on grand mean
+
     
     %  Remove linearly dependent variables from xhat. NB we will not be
     %  looking at coefficients directly so don't care about ordering.
@@ -49,13 +50,33 @@ function beta_re = rereg(y,x,g)
     %     xhat = xhat(:,xvaries); %- repmat(xbarbar(xvaries),N,1) ;
     %  Not convinced we should subtract the above off if we are going to
     %  run a constant-less regression here.  Already demeaned by group.
-    xhat = licols(xhat,tol); 
-    xbar_g_li = licols(xbar_g,tol); 
+    %  Case:  *no* within-group variation in RHS variablese.
+    if sum(sum(xhat==0)) == size(xhat,1)*size(xhat,2)
+        xhat = ones(N,1);
+    else
+        xhat = licols(xhat,tol); 
+        %  Confirm that a constant would not be linearly dependent before adding.
+        if rank([ones(N,1),xhat]) > rank(xhat) 
+            xhat = [ones(N,1), xhat ];
+        end
+    end
+
+    %  Remove linearly dependent columns from dataset of group means, xbar_g.
+    if size(xbar_g,2) > 1
+        xbar_g_li = licols(xbar_g,tol);
+    else 
+        xbar_g_li = xbar_g;
+    end
+
+    %  add a constant if doing so would increase rank
+    if rank([xbar_g_li,ones(G,1)]) > rank(xbar_g_li)
+        xbar_g_li = [ones(G,1) xbar_g_li];
+    end
     
     %  1.  Within estimate
-    beta_w = [ ... ones(N,1),
-                xhat ...
-            ] \ (yhat) ; %  Do we really need the constant term here?  All variables demeaned so presumably this is precisely zero?
+    beta_w = [ ... 
+                xhat ...  % constant term  included in this, if appropriate.
+            ] \ (yhat) ; 
     sigma2e = sum( (yhat - [ ... ones(N,1),  <-- all variables centered on zero so constant term not necessary
             xhat ...
             ]*beta_w ).^2 ) ...
