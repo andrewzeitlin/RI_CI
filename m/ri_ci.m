@@ -1,6 +1,14 @@
 function varargout = ri_ci(DATA, outcome, txvars, tau0 , T0, P, varargin) % model, stat, varargin
 
 	%  Function to conduct RI, including (optionally) confidence intervaals and test of the no-effect null.
+
+	%  TODO (1): add functionality to allow estimation commands other than -lm-.
+	%	- clusterreg() 
+	%   - rereg()
+	%   - fitlme()
+	%  TODO (2):  allow specification of *inner* boundaries for CI search, so that this can be performed more efficiently/with greater accuracy/over a smaller search region.
+	
+
 	%  Container for outputs:
 	varargout = cell(1, nargout);
 	
@@ -10,18 +18,19 @@ function varargout = ri_ci(DATA, outcome, txvars, tau0 , T0, P, varargin) % mode
 
 	%  Parse inputs
 	params = inputParser ; 
-	addOptional(params,'Controls',{'unspecified'});  % observational RHS variables
-	addOptional(params,'Clusters',{'unspecified'});  % for clustered standard errors in linear model
-	addOptional(params,'Model',{'lm'});  % model type
-	addOptional(params,'TestType',{'tStat'});
-	addOptional(params,'TestSide',{'twosided'}); % test type for the primary test
-	addOptional(params,'FindCI',false);  %  Switch: locate confidence interval
-	addOptional(params,'CIguess',[0 0]); % initial guess for confidence interval. 
-	addOptional(params,'MaxQueries',10); % maximum number of trials to find each end of the confidence interval
-	addOptional(params,'MinStepSize',0); % minimum step size for stopping rule.
-	addOptional(params,'SignificanceLevel',0.05); % alpha for CI
-	addOptional(params,'ShowMainEstimates',false); % to replay results of primary estimate.
-	addOptional(params,'CheckBoundaries',true); % check boundaries for CI esitmation.
+	addOptional(params,'Controls',{'unspecified'}); % observational RHS variables
+	addOptional(params,'Clusters',{'unspecified'}); % for clustered standard errors in linear model
+	addOptional(params,'Model',{'lm'});  			% model type
+	addOptional(params,'TestType',{'tStat'});		%  name of test statistic
+	addOptional(params,'TestSide',{'twosided'}); 	% test type for the primary test
+	addOptional(params,'FindCI',false);  			%  Switch: locate confidence interval
+	addOptional(params,'CIguess',[0 0]); 			% initial guess for confidence interval. 
+	addOptional(params,'MaxQueries',10); 			% maximum number of trials to find each end of the confidence interval
+	addOptional(params,'MinStepSize',0); 			% minimum step size for stopping rule.
+	addOptional(params,'SignificanceLevel',0.05); 	% alpha for CI
+	addOptional(params,'ShowMainEstimates',false); 	% to replay results of primary estimate.
+	addOptional(params,'CheckBoundaries',true); 	% check boundaries for CI esitmation.
+	addOptional(params,'groupvar',{''}); 			% group variable for random effects or clustered estimates
 	parse(params,varargin{:}); 
 
 	g = params.Results.Clusters;
@@ -43,7 +52,7 @@ function varargout = ri_ci(DATA, outcome, txvars, tau0 , T0, P, varargin) % mode
 	%  Containers for results 
 	TEST0 = NaN(P,length(txvars)); % to hold null distribution for test statistic.
 
-	%  Estimate the model using the actual assignment
+	%  Estimate the model using the actual assignment. Obtain test statistic.  
 	if strcmp(model,'lm')
 		lm = fitlm(DATA(:,[txvars xvars outcome])) ;
 		TEST1 = table2array(lm.Coefficients([txvars],[TestType]))';
@@ -53,6 +62,11 @@ function varargout = ri_ci(DATA, outcome, txvars, tau0 , T0, P, varargin) % mode
 			beta = table2array(lm.Coefficients(2,'Estimate')); 
 			se   = table2array(lm.Coefficients(2,'SE')); 
 		end
+	end
+
+	if strcmp(model,'rereg') 
+
+
 	end
 
 	[ pvalue TEST0 y0 ] = ri_estimates(DATA,outcome,txvars,tau0,xvars, model,T0,P,TestType,TestSide,TEST1) ; 
