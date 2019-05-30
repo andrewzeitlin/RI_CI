@@ -1,4 +1,4 @@
-function beta_re = rereg(y,x,g)
+function results = rereg(DATA,yvar,xvars,groupvar)
 	%  Function to estimate random-effects model.
 	%  Delivers coefficients only.
 	%  Assumes random-effect groups are reported in an (N x 1) vector of group indices.
@@ -16,6 +16,11 @@ function beta_re = rereg(y,x,g)
     %  Tolerance for claim that there is no within-group variation in some
     %  characteristic 
     tol = 1e-9; % ToDo:  Allow specifying this as an option.
+
+    %  Extract data as matrices from table DATA.
+    y = table2array(DATA(:,yvar)) ;
+    x = table2array(DATA(:,xvars));
+    g = table2array(DATA(:,groupvar)); 
     
 	%  0.  Collect some useful ingredients
     %  Check if regressors, x, include a constant term. If so, do nothing.
@@ -37,7 +42,8 @@ function beta_re = rereg(y,x,g)
     %  If adding a constant term to x increases its rank, do so
     %  ToDo:  replace use of rank() function with something more efficient for large matrices.
     if rank([x,ones(N,1)]) > rank(x) 
-        x = [x,ones(N,1)];
+        x = [ones(N,1),x];
+        xvars = [{'Constant'},xvars];
     end
 
     %  Group stats, demeaned outcomes, mean outcomes
@@ -91,7 +97,10 @@ function beta_re = rereg(y,x,g)
     theta_g = repelem(theta_g,T_g,1); 
     
     %  4.  GLS  
-    beta_re = [ ... 
+    x_tr = x - repmat(theta_g,1,size(xbar_g,2)).*repelem(xbar_g,T_g,1);   % included regressors; there is a constant in x.
+    y_tr = y - theta_g .* repelem(ybar_g,T_g,1) ; 
+
+    beta_re = x_tr \ y_tr ; [ ... 
             x - repmat(theta_g,1,size(xbar_g,2)).*repelem(xbar_g,T_g,1) ...  % included regressors; there is a constant in x.
             ] ...
             \ ...
@@ -101,5 +110,12 @@ function beta_re = rereg(y,x,g)
     %     if flag_addedconstant == 1 
     %         beta_re = beta_re(1:end-1); 
     %     end
+
+    %  Compute variance-covariance matrix
+
+    %  Standard errors
+
+    %  Export results as table
+    results = array2table(beta_re,'VariableNames',{'beta'},'RowNames', xvars);
 end
 
