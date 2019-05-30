@@ -1,9 +1,9 @@
-
-
-function [pvalue CI QUERIES_UB QUERIES_LB TEST1 TEST0 y0 ] = ri_ci(DATA, outcome, txvars, tau0 , T0, P, varargin) % model, stat, varargin
+function varargout = ri_ci(DATA, outcome, txvars, tau0 , T0, P, varargin) % model, stat, varargin
 
 	%  Function to conduct RI, including (optionally) confidence intervaals and test of the no-effect null.
-
+	%  Container for outputs:
+	varargout = cell(1, nargout);
+	
 	if size(tau0,1) > size(tau0,2) 
 		error('null treatment vector tau0 should be (1 x K) not (K x 1)');
 	end
@@ -20,6 +20,8 @@ function [pvalue CI QUERIES_UB QUERIES_LB TEST1 TEST0 y0 ] = ri_ci(DATA, outcome
 	addOptional(params,'MaxQueries',10); % maximum number of trials to find each end of the confidence interval
 	addOptional(params,'MinStepSize',0); % minimum step size for stopping rule.
 	addOptional(params,'SignificanceLevel',0.05); % alpha for CI
+	addOptional(params,'ShowMainEstimates',false); % to replay results of primary estimate.
+	addOptional(params,'CheckBoundaries',true); % check boundaries for CI esitmation.
 	parse(params,varargin{:}); 
 
 	g = params.Results.Clusters;
@@ -30,6 +32,7 @@ function [pvalue CI QUERIES_UB QUERIES_LB TEST1 TEST0 y0 ] = ri_ci(DATA, outcome
 	if strcmp(xvars{1}, 'unspecified'), xvars = {}; end
 	FindCI = params.Results.FindCI ;
 	MaxQueries = params.Results.MaxQueries; 
+	MinStepSize = params.Results.MinStepSize; 
 	SignificanceLevel = params.Results.SignificanceLevel;  
 
 	if FindCI & length(txvars)> 1
@@ -41,9 +44,8 @@ function [pvalue CI QUERIES_UB QUERIES_LB TEST1 TEST0 y0 ] = ri_ci(DATA, outcome
 	TEST0 = NaN(P,length(txvars)); % to hold null distribution for test statistic.
 
 	%  Estimate the model using the actual assignment
-	sprintf('__RESULTS OF ANALYTICAL MODEL:__');
 	if strcmp(model,'lm')
-		lm = fitlm(DATA(:,[txvars xvars outcome]))
+		lm = fitlm(DATA(:,[txvars xvars outcome])) ;
 		TEST1 = table2array(lm.Coefficients([txvars],[TestType]))';
 
 		%  Starting values for search for 95% CI
@@ -55,8 +57,11 @@ function [pvalue CI QUERIES_UB QUERIES_LB TEST1 TEST0 y0 ] = ri_ci(DATA, outcome
 
 	[ pvalue TEST0 y0 ] = ri_estimates(DATA,outcome,txvars,tau0,xvars, model,T0,P,TestType,TestSide,TEST1) ; 
 
-	sprintf('The p-value from Randomization Inference for the hypothesis that tau = %02.2f is %0.2f',tau0, pvalue)
-
+	if params.Results.ShowMainEstimates 
+		sprintf('__RESULTS OF ANALYTICAL MODEL:__')
+		lm 
+		sprintf('The p-value from Randomization Inference for the hypothesis that tau = %02.2f is %0.2f',tau0, pvalue)
+	end
 	%  If requested, find confidence interval
 	if FindCI 
 
@@ -66,20 +71,24 @@ function [pvalue CI QUERIES_UB QUERIES_LB TEST1 TEST0 y0 ] = ri_ci(DATA, outcome
 		middle = (lb + ub) / 2 ; 
 
 		%  Confirm that p-value at upper bound of search region is below significance threshold
-		[p , ~ , ~ ] = ri_estimates(DATA, outcome,txvars,ub,xvars, model,T0,P,TestType,"righttail",TEST1); 
-		if p > SignificanceLevel/2
-			error('Initial value for upper bound of CI not big enough.')
+		if params.Results.CheckBoundaries 
+			[p , ~ , ~ ] = ri_estimates(DATA, outcome,txvars,ub,xvars, model,T0,P,TestType,'right',TEST1); 
+			if p > SignificanceLevel/2
+				error('Initial value for upper bound of CI not big enough.')
+			end
 		end
 
 		QUERIES_UB = NaN(MaxQueries,2); 
 		q = 1 ; 
-		while q <= MaxQueries % TODO: add step-size constraint.
-			fprintf('This is counter number %i \n', q)
+		stepsize = MinStepSize + 1 ;
+		while q <= MaxQueries & stepsize >= MinStepSize % TODO: add step-size constraint.
+			% fprintf('This is counter number %i \n', q)
 			QUERIES_UB(q,1) = middle;
-			[p , ~ , ~ ] = ri_estimates(DATA, outcome,txvars,middle,xvars, model,T0,P,TestType,"righttail",TEST1); 
+			[p , ~ , ~ ] = ri_estimates(DATA, outcome,txvars,middle,xvars, model,T0,P,TestType,'right',TEST1); 
 			QUERIES_UB(q,2) = p;
 
 			%  If reject, move left.  Otherwise, move right.
+			if q > 1, m0 = middle ; end % store previous tested value if appropriate
 			if p <= SignificanceLevel/2
 				ub = middle;
 				middle = (ub + lb ) / 2;  
@@ -87,11 +96,16 @@ function [pvalue CI QUERIES_UB QUERIES_LB TEST1 TEST0 y0 ] = ri_ci(DATA, outcome
 				lb = middle;
 				middle = (ub + lb ) / 2;  
 			end
+			if q > 1 
+				stepsize = abs(m0 - middle) ;
+			else 
+				stepsize = MinStepSize + 1 ; % don't let this constraint bind on first try
+			end 
 
 			%  Update counter
 			q = q+1;
 		end
-		CI_UB = min(QUERIES_UB(QUERIES_UB(:,2) > SignificanceLevel/2),1)
+		CI_UB = max(QUERIES_UB(QUERIES_UB(:,2) > SignificanceLevel/2, 1)) ; 
 
 		%  Find lower boundary of CI. -------------------------------------%
 		ub = beta ;
@@ -99,20 +113,24 @@ function [pvalue CI QUERIES_UB QUERIES_LB TEST1 TEST0 y0 ] = ri_ci(DATA, outcome
 		middle = (lb + ub) / 2 ; 
 
 		%  Confirm that p-value at lower bound of search region is below significance threshold
-		[p , ~,  ~ ] = ri_estimates(DATA, outcome,txvars,lb,xvars, model,T0,P,TestType,"lefttail",TEST1); 
-		if p > SignificanceLevel/2
-			error('Initial value for lower bound of CI not low enough.')
+		if params.Results.CheckBoundaries 
+			[p , ~,  ~ ] = ri_estimates(DATA, outcome,txvars,lb,xvars, model,T0,P,TestType,'left',TEST1); 
+			if p > SignificanceLevel/2
+				error('Initial value for lower bound of CI not low enough.')
+			end
 		end
 
 		QUERIES_LB = NaN(MaxQueries,2); 
 		q = 1 ; 
-		while q <= MaxQueries % TODO: add step-size constraint.
-			fprintf('This is counter number %i \n', q)
+		stepsize = MinStepSize + 1 ;
+		while q <= MaxQueries & stepsize >= MinStepSize 
+			%  fprintf('This is counter number %i \n', q)
 			QUERIES_LB(q,1) = middle;
-			[p , ~ , ~ ] = ri_estimates(DATA, outcome,txvars,middle,xvars, model,T0,P,TestType,"lefttail",TEST1); 
-			QUERIES_UB(q,2) = p;
+			[p , ~ , ~ ] = ri_estimates(DATA, outcome,txvars,middle,xvars, model,T0,P,TestType,'left',TEST1); 
+			QUERIES_LB(q,2) = p;
 
 			%  If reject, move left.  Otherwise, move right.
+			if q > 1, m0 = middle ; end % store previous tested value if appropriate
 			if p <= SignificanceLevel/2
 				lb = middle;
 				middle = (ub + lb ) / 2;  
@@ -121,14 +139,29 @@ function [pvalue CI QUERIES_UB QUERIES_LB TEST1 TEST0 y0 ] = ri_ci(DATA, outcome
 				middle = (ub + lb ) / 2;  
 			end
 
-			%  Update counter
+			%  Update counter(s)
+			if q > 1 
+				stepsize = abs(m0 - middle) ;
+			else 
+				stepsize = MinStepSize + 1 ; % don't let this constraint bind on first query
+			end 
 			q = q+1;
 		end
-		CI_LB = max(QUERIES_UB(QUERIES_UB(:,2) > SignificanceLevel/2),1); 
+		CI_LB = min(QUERIES_LB( QUERIES_LB(:,2) > SignificanceLevel/2, 1)); 
 
 		%  Return CI as a vector
 		CI = [CI_LB , CI_UB];
 	end
+
+
+	% Write function outputs
+	if nargout >= 1 , varargout{1} = pvalue ; end
+	if nargout >= 2 , varargout{2} = TEST1 ; end 
+	if nargout >= 3 , varargout{3} = TEST0 ; end 
+	if nargout >= 4 , varargout{4} = y0 ; end
+	if nargout >= 5 , varargout{5} = CI ; end
+	if nargout >= 6 , varargout{6} = QUERIES_UB ; end
+	if nargout >= 7 , varargout{7} = QUERIES_LB ; end 
 
 end
 
@@ -158,11 +191,11 @@ function [pvalue TEST0 y0 ] = ri_estimates(DATA,outcome,txvars,tau0,xvars, model
 	end
 
 	%  get p-value
-	if ~strcmp(TestSide, "righttail") , p_left = mean(TEST0 < repmat(TEST1,P,1)) ; end
-	if ~strcmp(TestSide, "lefttail") , p_right = mean(TEST0 > repmat(TEST1,P,1)) ; end
+	if ~strcmp(TestSide(1), 'right') , p_left = mean(TEST0 < repmat(TEST1,P,1)) ; end
+	if ~strcmp(TestSide(1), 'left') ,  p_right = mean(TEST0 > repmat(TEST1,P,1)) ; end
 	
-	if strcmp(TestSide, "righttail"), pvalue = p_right;
-	elseif strcmp(TestSide,"lefttail"), pvalue = p_left; 
+	if strcmp(TestSide(1), 'right'), pvalue = p_right;
+	elseif strcmp(TestSide(1), 'left'), pvalue = p_left; 
 	else pvalue = min(2*min(p_left,p_right),1) ;
 	end
 
