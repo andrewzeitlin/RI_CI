@@ -29,6 +29,7 @@ function varargout = ri_ci(DATA, outcome, txvars, tau0 , T0, P, varargin) % mode
 	addOptional(params,'MinStepSize',0); 			% minimum step size for stopping rule.
 	addOptional(params,'SignificanceLevel',0.05); 	% alpha for CI
 	addOptional(params,'ShowMainEstimates',false); 	% to replay results of primary estimate.
+	addOptional(params,'TestZero',true); 			% to add a test of the zero null. Defaults on.
 	addOptional(params,'CheckBoundaries',true); 	% check boundaries for CI esitmation.
 	addOptional(params,'GroupVar',{''}); 			% group variable for random effects or clustered estimates
 	parse(params,varargin{:}); 
@@ -68,15 +69,17 @@ function varargout = ri_ci(DATA, outcome, txvars, tau0 , T0, P, varargin) % mode
 	if strcmp(model,'rereg') 
 		result = rereg(DATA,outcome,[txvars xvars] ,groupvar )
 		TEST1 = table2array(result([txvars],[TestType]));
-		% if FindCI 
-		% 	beta = table2array(result(txvars,{'beta'}));
-		% 	se = table2array(result(txvars,{'se'}));
-		% end
+		if FindCI 
+			beta = table2array(result(txvars,{'beta'}));
+			se = table2array(result(txvars,{'SE'}));
+		end
 	end
 
 	%  Conduct RI on the model, using the point estimmate as a point of comparison. Two-sided test, null hypothesis as specified by user (parameter tau0). 
-	[ pvalue TEST0 y0 ] = ri_estimates(DATA,outcome,txvars,tau0,xvars, model,T0,P,TestType,TestSide,TEST1, 'GroupVar',groupvar) ; 
-
+	if params.Results.TestZero 
+		[ pvalue TEST0 y0 ] = ri_estimates(DATA,outcome,txvars,tau0,xvars, model,T0,P,TestType,TestSide,TEST1, 'GroupVar',groupvar) ; 
+	end
+	
 	if params.Results.ShowMainEstimates 
 		sprintf('__RESULTS OF ANALYTICAL MODEL:__')
 		lm 
@@ -92,7 +95,9 @@ function varargout = ri_ci(DATA, outcome, txvars, tau0 , T0, P, varargin) % mode
 
 		%  Confirm that p-value at upper bound of search region is below significance threshold
 		if params.Results.CheckBoundaries 
-			[p , ~ , ~ ] = ri_estimates(DATA, outcome,txvars,ub,xvars, model,T0,P,TestType,'right',TEST1); 
+			if strcmp(model,'lm') [p , ~ , ~ ] = ri_estimates(DATA, outcome,txvars,ub,xvars, model,T0,P,TestType,'right',TEST1); 
+			elseif strcmp(model,'rereg') [p , ~ , ~ ] = ri_estimates(DATA, outcome,txvars,ub,xvars, model,T0,P,TestType,'right',TEST1,'GroupVar',groupvar); 
+			end
 			if p > SignificanceLevel/2
 				error('Initial value for upper bound of CI not big enough.')
 			end
@@ -104,7 +109,9 @@ function varargout = ri_ci(DATA, outcome, txvars, tau0 , T0, P, varargin) % mode
 		while q <= MaxQueries & stepsize >= MinStepSize % TODO: add step-size constraint.
 			% fprintf('This is counter number %i \n', q)
 			QUERIES_UB(q,1) = middle;
-			[p , ~ , ~ ] = ri_estimates(DATA, outcome,txvars,middle,xvars, model,T0,P,TestType,'right',TEST1); 
+			if strcmp(model,'lm') [p , ~ , ~ ] = ri_estimates(DATA, outcome,txvars,middle,xvars, model,T0,P,TestType,'right',TEST1); 
+			elseif strcmp(model,'rereg') [p , ~ , ~ ] = ri_estimates(DATA, outcome,txvars,middle,xvars, model,T0,P,TestType,'right',TEST1,'GroupVar',groupvar); 
+			end
 			QUERIES_UB(q,2) = p;
 
 			%  If reject, move left.  Otherwise, move right.
@@ -134,7 +141,10 @@ function varargout = ri_ci(DATA, outcome, txvars, tau0 , T0, P, varargin) % mode
 
 		%  Confirm that p-value at lower bound of search region is below significance threshold
 		if params.Results.CheckBoundaries 
-			[p , ~,  ~ ] = ri_estimates(DATA, outcome,txvars,lb,xvars, model,T0,P,TestType,'left',TEST1); 
+			if strcmp(model,'lm') [p , ~,  ~ ] = ri_estimates(DATA, outcome,txvars,lb,xvars, model,T0,P,TestType,'left',TEST1); 
+			elseif strcmp(model,'rereg') [p , ~ , ~ ] = ri_estimates(DATA, outcome,txvars,lb, xvars, model,T0,P,TestType,'left',TEST1,'GroupVar',groupvar); 
+			end
+
 			if p > SignificanceLevel/2
 				error('Initial value for lower bound of CI not low enough.')
 			end
@@ -146,7 +156,9 @@ function varargout = ri_ci(DATA, outcome, txvars, tau0 , T0, P, varargin) % mode
 		while q <= MaxQueries & stepsize >= MinStepSize 
 			%  fprintf('This is counter number %i \n', q)
 			QUERIES_LB(q,1) = middle;
-			[p , ~ , ~ ] = ri_estimates(DATA, outcome,txvars,middle,xvars, model,T0,P,TestType,'left',TEST1); 
+			if strcmp(model,'lm') [p , ~ , ~ ] = ri_estimates(DATA, outcome,txvars,middle,xvars, model,T0,P,TestType,'left',TEST1); 
+			elseif strcmp(model,'rereg') [p , ~ , ~ ] = ri_estimates(DATA, outcome,txvars,middle, xvars, model,T0,P,TestType,'left',TEST1,'GroupVar',groupvar); 
+			end
 			QUERIES_LB(q,2) = p;
 
 			%  If reject, move left.  Otherwise, move right.
