@@ -110,9 +110,13 @@ clear rereg
 clear ri_ci
 [pval,t1,t0] = ri_ci(D,{'y'},{'t'},0, T0, 50,'Model','rereg','GroupVar',{'g'} ); % is the problem here that groupvar needs to be passed to rereg as the name of a variable, not as an actual vector/array?
 
-foo = array2table([1,2;3,4],'RowNames',{'a' 'b'},'VariableNames',{'c' 'd'});
-therow = {'a'};
-thecolumn = {'d'};
-foo(therow,thecolumn)
 
-
+clear ri_ci
+tau0 = 0 ;
+tic
+[pval ,~,~,~,CI,Q_LB,Q_UB] = ri_ci(D,{'y'},{'t'},tau0, T0, R ...
+    , 'Model', 'ks' ...
+    , 'TestZero', true ... % don't bother with p-value for tau=0
+    , 'FindCI', true ...
+    );  % ,~,~,~,CI ,Q_UB, Q_LB 
+toc
