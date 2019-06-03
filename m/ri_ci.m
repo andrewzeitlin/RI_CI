@@ -30,7 +30,7 @@ function varargout = ri_ci(DATA, outcome, txvars, tau0 , T0, P, varargin) % mode
 	addOptional(params,'SignificanceLevel',0.05); 	% alpha for CI
 	addOptional(params,'ShowMainEstimates',false); 	% to replay results of primary estimate.
 	addOptional(params,'CheckBoundaries',true); 	% check boundaries for CI esitmation.
-	addOptional(params,'groupvar',{''}); 			% group variable for random effects or clustered estimates
+	addOptional(params,'GroupVar',{''}); 			% group variable for random effects or clustered estimates
 	parse(params,varargin{:}); 
 
 	g = params.Results.Clusters;
@@ -43,6 +43,7 @@ function varargout = ri_ci(DATA, outcome, txvars, tau0 , T0, P, varargin) % mode
 	MaxQueries = params.Results.MaxQueries; 
 	MinStepSize = params.Results.MinStepSize; 
 	SignificanceLevel = params.Results.SignificanceLevel;  
+	groupvar = params.Results.GroupVar; 
 
 	if FindCI & length(txvars)> 1
 		error('Confidence interval search currently supports only one-dimensional treatment.')
@@ -65,11 +66,16 @@ function varargout = ri_ci(DATA, outcome, txvars, tau0 , T0, P, varargin) % mode
 	end
 
 	if strcmp(model,'rereg') 
-
-
+		result = rereg(DATA,outcome,[txvars xvars] ,groupvar )
+		TEST1 = table2array(result([txvars],[TestType]));
+		% if FindCI 
+		% 	beta = table2array(result(txvars,{'beta'}));
+		% 	se = table2array(result(txvars,{'se'}));
+		% end
 	end
 
-	[ pvalue TEST0 y0 ] = ri_estimates(DATA,outcome,txvars,tau0,xvars, model,T0,P,TestType,TestSide,TEST1) ; 
+	%  Conduct RI on the model, using the point estimmate as a point of comparison. Two-sided test, null hypothesis as specified by user (parameter tau0). 
+	[ pvalue TEST0 y0 ] = ri_estimates(DATA,outcome,txvars,tau0,xvars, model,T0,P,TestType,TestSide,TEST1, 'GroupVar',groupvar) ; 
 
 	if params.Results.ShowMainEstimates 
 		sprintf('__RESULTS OF ANALYTICAL MODEL:__')
@@ -181,8 +187,15 @@ end
 
 
 %  Subfunction to conduct RI for a particular value
-function [pvalue TEST0 y0 ] = ri_estimates(DATA,outcome,txvars,tau0,xvars, model, T0, P,TestType,TestSide,TEST1)
+function [pvalue TEST0 y0 ] = ri_estimates(DATA,outcome,txvars,tau0,xvars, model, T0, P,TestType,TestSide,TEST1,varargin)
 	%  p-value for hypothesized sharp null.
+
+	%  Unpack.
+	options = inputParser ; 
+	addOptional(options,'GroupVar',{''}); 
+	parse(options,varargin{:}); 
+	groupvar = options.Results.GroupVar; 
+
 	%  Run DGP in reverse to get y0
 	y0 = table2array(DATA(:,outcome)) - table2array(DATA(:,txvars)) * tau0' ;
 
@@ -200,8 +213,14 @@ function [pvalue TEST0 y0 ] = ri_estimates(DATA,outcome,txvars,tau0,xvars, model
 				lm.Coefficients(2:1+length(txvars) ... % leaving room for constant term
 				, [TestType]) ...
 				)';
-			TEST0(pp,:) = testStat;
 		end
+		if strcmp(model,'rereg') 
+			DATA.ystar = ystar ; % rereg() syntax requires this to be part of the table.
+			result = rereg(DATA,{'ystar'},[txvars xvars],groupvar)
+			teststat = table2array(result({txvars}, TestType ));
+		end
+		TEST0(pp,:) = testStat;
+
 	end
 
 	%  get p-value
