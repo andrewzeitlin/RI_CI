@@ -200,7 +200,8 @@ function [pvalue TEST0 y0 ] = ri_estimates(DATA,outcome,txvars,tau0,xvars, model
 	y0 = table2array(DATA(:,outcome)) - table2array(DATA(:,txvars)) * tau0' ;
 
 	%  Now, loop over feasible randomizations, impose treatment effect, re-estimate, and extract test statistic
-	x = table2array(DATA(:,xvars)); % for speed.
+	if strcmp(model,'lm'), x = table2array(DATA(:,xvars)); end % for speed.
+
 	for pp = 1 : P
 
 		%  Impose hypothesized DGP
@@ -216,8 +217,9 @@ function [pvalue TEST0 y0 ] = ri_estimates(DATA,outcome,txvars,tau0,xvars, model
 		end
 		if strcmp(model,'rereg') 
 			DATA.ystar = ystar ; % rereg() syntax requires this to be part of the table.
-			result = rereg(DATA,{'ystar'},[txvars xvars],groupvar)
-			teststat = table2array(result({txvars}, TestType ));
+			DATA(:,txvars) = array2table(permute(T0(:,pp,:),[1 3 2])) ; 
+			result = rereg(DATA,{'ystar'},[txvars xvars],groupvar);
+			testStat = table2array(result(txvars, TestType))';
 		end
 		TEST0(pp,:) = testStat;
 
