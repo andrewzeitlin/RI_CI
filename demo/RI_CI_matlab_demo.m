@@ -114,9 +114,21 @@ clear ri_ci
 clear ri_ci
 tau0 = 0 ;
 tic
-[pval ,~,~,~,CI,Q_LB,Q_UB] = ri_ci(D,{'y'},{'t'},tau0, T0, R ...
+[pval ,~,~,~,CI,Q_UB,Q_LB] = ri_ci(D,{'y'},{'t'},tau0, T0, R ...
     , 'Model', 'ks' ...
     , 'TestZero', true ... % don't bother with p-value for tau=0
     , 'FindCI', true ...
     );  % ,~,~,~,CI ,Q_UB, Q_LB 
 toc
+
+[Q_UB, Q_LB]
+
+figure(5)
+clf
+hax = axes;
+hold on
+scatter(Q_UB(:,1),Q_UB(:,2))
+scatter(Q_LB(:,1),Q_LB(:,2))
+line([CI(1) CI(1)],get(hax,'YLim'),'Color','red'); % [0 1])
+line([CI(2) CI(2)],get(hax,'YLim'),'Color','red'); % [0 1])
+hold off
