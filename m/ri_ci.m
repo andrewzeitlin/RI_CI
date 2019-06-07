@@ -36,6 +36,7 @@ function varargout = ri_ci(DATA, outcome, txvars, tau0 , T0, P, varargin) % mode
 	parse(params,varargin{:}); 
 
 	model = params.Results.Model; 
+	TestZero = params.Results.TestZero; 
 	TestType = params.Results.TestType; 
 	TestSide = params.Results.TestSide;
 	xvars = params.Results.Controls;
@@ -91,7 +92,7 @@ function varargout = ri_ci(DATA, outcome, txvars, tau0 , T0, P, varargin) % mode
 		[~,~,TEST1] = kstest2(ydd(tx==0),ydd(tx==1)) % two-sample KS stat
 
 		%  replace outcome variable in DATA with residualized version
-		if params.Results.TestZero | FindCI 
+		if TestZero | FindCI 
 			DATA(:,outcome) = array2table(ydd);
 		end
 
@@ -104,8 +105,8 @@ function varargout = ri_ci(DATA, outcome, txvars, tau0 , T0, P, varargin) % mode
 	end
 
 	%  Conduct RI on the model, using the point estimmate as a point of comparison. Two-sided test, null hypothesis as specified by user (parameter tau0). 
-	if params.Results.TestZero 
-		[ pvalue TEST0 y0 ] = ri_estimates(DATA,outcome,txvars,tau0 ...
+	if TestZero 
+		[ pvalue TEST0 ] = ri_estimates(DATA,outcome,txvars,tau0 ...
 			,xvars, model,T0,P ...
 			,TestType,TestSide,TEST1 ...
 			,'GroupVar',groupvar ...
@@ -210,13 +211,12 @@ function varargout = ri_ci(DATA, outcome, txvars, tau0 , T0, P, varargin) % mode
 
 
 	% Write function outputs
-	if nargout >= 1 , varargout{1} = pvalue ; end
-	if nargout >= 2 , varargout{2} = TEST1 ; end 
-	if nargout >= 3 , varargout{3} = TEST0 ; end 
-	if nargout >= 4 , varargout{4} = y0 ; end
-	if nargout >= 5 , varargout{5} = CI ; end
-	if nargout >= 6 , varargout{6} = QUERIES_UB ; end
-	if nargout >= 7 , varargout{7} = QUERIES_LB ; end 
+	if TestZero , varargout{1} = pvalue ; end
+	if FindCI , varargout{2} = CI ; end
+	if nargout >= 3 , varargout{3} = TEST1 ; end 
+	if nargout >= 4 , varargout{4} = TEST0 ; end 
+	if nargout >= 5 , varargout{5} = QUERIES_UB ; end
+	if nargout >= 6 , varargout{6} = QUERIES_LB ; end 
 end
 
 
