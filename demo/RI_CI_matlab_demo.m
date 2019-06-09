@@ -4,7 +4,7 @@ addpath('../m'); % assumes we are in the /demo/ folder as pwd
 
 %  Parameters of the simulation
 N = 1000; % number of observations
-R = 100 ; % number of alternative permutations of the treatment assignment to be used
+R = 500 ; % number of alternative permutations of the treatment assignment to be used
 tau = 1 ; % treatment effect
 
 %  Generate data 
@@ -18,8 +18,7 @@ DATA = array2table([y,t,x] , 'VariableNames',{'y','t','x'});
 
 clear ri_ci
 tau0 = 0;
-[pval t1 t0] = ri_ci(DATA,{'y'},{'t'},tau0, T0, R ,'ShowMainEstimates',true);
-%scatter(y0,y0star) % confirm this recovers the true y0
+[pval, ~, t1, t0] = ri_ci(DATA,{'y'},{'t'},tau0, T0, R ,'ShowMainEstimates',true);
 
 figure(1)
 clf
@@ -36,8 +35,7 @@ rightprob = ri_ci(DATA,{'y'},{'t'},0, T0, 100,'TestSide','righttail')
 
 clear ri_ci
 tau0 = 1;
-[pval t1 t0] = ri_ci(DATA,{'y'},{'t'},tau0, T0, 100);
-%scatter(y0,y0star) % confirm this recovers the true y0
+[pval ~ t1 t0] = ri_ci(DATA,{'y'},{'t'},tau0, T0, 100);
 
 figure(2)
 clf
@@ -51,7 +49,7 @@ hold off
 clear ri_ci
 tau0 = 0;
 tic
-[pval ,~,~,~,CI ,Q_UB, Q_LB ] = ri_ci(DATA,{'y'},{'t'},tau0, T0, R ,'FindCI',true);
+[pval ,CI,~,~,Q_UB, Q_LB ] = ri_ci(DATA,{'y'},{'t'},tau0, T0, R ,'FindCI',true);
 toc
 
 pval
@@ -69,7 +67,15 @@ line([CI(1) CI(1)],get(hax,'YLim'),'Color','red'); % [0 1])
 line([CI(2) CI(2)],get(hax,'YLim'),'Color','red'); % [0 1])
 hold off
 
-R = 500 ; % number of alternative permutations of the treatment assignment to be usedtau = 1 ;
+
+
+
+%--------------------------------------------------------------------------%
+%%  DEMO FOR OTHER TYPES OF MODELS 
+%--------------------------------------------------------------------------%
+
+R = 100 ; % number of alternative permutations of the treatment assignment to be usedtau = 1 ;
+
 const = 10 ; 
 G=200;  % number of clusters
 n=5;    % number of observations/cluster
@@ -87,7 +93,7 @@ x_g = kron(x_g,ones(n,1));
 g = kron(g,ones(n,1));
 
 %  constant additive treatment effect
-tau = 1; 
+tau = 10; 
 
 %  remainder of DGP at individual level
 e_0i = randn(G*n,1);
@@ -104,17 +110,47 @@ lm = fitlm(D,'y~ t + x_i + x_g') % ([t x_g x_i ],y)
 %beta_re = rereg(y,[t , x_g, x_i],g)  % <- ols syntax:  assumes data are in arrays rather than tables.
 re = rereg(D,{'y'},{'t' 'x_i' 'x_g'},{'g'})
 
-D.Properties.VariableNames
-
 clear rereg
 clear ri_ci
-[pval,t1,t0] = ri_ci(D,{'y'},{'t'},0, T0, 50,'Model','rereg','GroupVar',{'g'} ); % is the problem here that groupvar needs to be passed to rereg as the name of a variable, not as an actual vector/array?
+tic
+pval = ri_ci(D,{'y'},{'t'}, T0, R,'Model','rereg','GroupVar',{'g'} )
+toc
+
+clear ri_ci
+tic
+[pval,CI,~,~,Q_UB, Q_LB ] = ri_ci(D,{'y'},{'t'}, T0, R ...
+    , 'Model', 'rereg', 'GroupVar',{'g'} ...
+    ,'FindCI',true ...
+    , 'TestZero', false ... % don't bother with p-value for tau=0
+    );
+toc
+
+CI
+[Q_UB, Q_LB]
+figure(4)
+clf
+hax = axes;
+hold on
+scatter(Q_UB(:,1),Q_UB(:,2))
+scatter(Q_LB(:,1),Q_LB(:,2))
+line([CI(1) CI(1)],get(hax,'YLim'),'Color','red'); % [0 1])
+line([CI(2) CI(2)],get(hax,'YLim'),'Color','red'); % [0 1])
+hold off
+
+clear ri_ci
+tic
+[pval ] = ri_ci(D,{'y'},{'t'}, T0, R ...
+    , 'Model', 'ks' ...
+    , 'TestZero', true ... 
+    , 'FindCI', false ...
+    )
+toc
 
 
 clear ri_ci
 tau0 = 0 ;
 tic
-[pval ,~,~,~,CI,Q_UB,Q_LB] = ri_ci(D,{'y'},{'t'},tau0, T0, R ...
+[pval, CI,~,~,Q_UB,Q_LB] = ri_ci(D,{'y'},{'t'}, T0, R ...
     , 'Model', 'ks' ...
     , 'TestZero', true ... % don't bother with p-value for tau=0
     , 'FindCI', true ...
@@ -132,3 +168,22 @@ scatter(Q_LB(:,1),Q_LB(:,2))
 line([CI(1) CI(1)],get(hax,'YLim'),'Color','red'); % [0 1])
 line([CI(2) CI(2)],get(hax,'YLim'),'Color','red'); % [0 1])
 hold off
+
+
+
+% a little demo to amke sure we are correctly interpreting the KS stat
+P = 100;
+KS0 = NaN(P,1);
+for pp = 1:P 
+    [~,~,ks] = kstest2( ...
+        y(T0(:,pp)==0) ...
+        , ...
+        y(T0(:,pp) ==1) ...
+        );
+    KS0(pp,1) = ks;
+end
+[~,~,ks] = kstest2(y(t==1),y(t==0))
+figure(9)
+clf
+ksdensity(KS0)
+

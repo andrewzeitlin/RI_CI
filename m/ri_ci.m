@@ -1,4 +1,4 @@
-function varargout = ri_ci(DATA, outcome, txvars, tau0 , T0, P, varargin) % model, stat, varargin
+function varargout = ri_ci(DATA, outcome, txvars, T0, P, varargin) % model, stat, varargin
 
 	%  Function to conduct RI, including (optionally) confidence intervaals and test of the no-effect null.
 
@@ -13,10 +13,6 @@ function varargout = ri_ci(DATA, outcome, txvars, tau0 , T0, P, varargin) % mode
 	%  Container for outputs:
 	varargout = cell(1, nargout);
 	
-	if size(tau0,1) > size(tau0,2) 
-		error('null treatment vector tau0 should be (1 x K) not (K x 1)');
-	end
-
 	%  Parse inputs
 	params = inputParser ; 
 	addOptional(params,'Controls',{}); % observational RHS variables
@@ -33,6 +29,8 @@ function varargout = ri_ci(DATA, outcome, txvars, tau0 , T0, P, varargin) % mode
 	addOptional(params,'CheckBoundaries',true); 	% check boundaries for CI esitmation.
 	addOptional(params,'GroupVar',{''}); 			% group variable for random effects or clustered estimates
 	addOptional(params,'TheTx',{}); 				% for vector-valued treatments, this cell array contains the name of the treatment of interest.
+	addOptional(params,'tau0',0 ) ; 				%  null to test if reporting a p-value. 
+	addOptional(params,'Noisily',false); 
 	parse(params,varargin{:}); 
 
 	model = params.Results.Model; 
@@ -46,6 +44,8 @@ function varargout = ri_ci(DATA, outcome, txvars, tau0 , T0, P, varargin) % mode
 	MinStepSize = params.Results.MinStepSize; 
 	SignificanceLevel = params.Results.SignificanceLevel;  
 	groupvar = params.Results.GroupVar; 
+	tau0 = params.Results.tau0 ; 
+	Noisily = params.Results.Noisily; 
 
 	%  If treatment assignment is vector-valued, need to decide which variable will be basis for the test for CI purposes.
 	if length(txvars)==1 | length(TheTx) == 0 
@@ -57,6 +57,9 @@ function varargout = ri_ci(DATA, outcome, txvars, tau0 , T0, P, varargin) % mode
 		error('Confidence interval search currently supports only one-dimensional treatment.')
 	end
 
+	if size(tau0,1) > size(tau0,2) 
+		error('null treatment vector tau0 should be (1 x K) not (K x 1)');
+	end
 
 	%  Containers for results 
 	TEST0 = NaN(P,length(txvars)); % to hold null distribution for test statistic.
@@ -90,6 +93,9 @@ function varargout = ri_ci(DATA, outcome, txvars, tau0 , T0, P, varargin) % mode
 			ydd = ydd - mean(ydd); 
 		end
 		[~,~,TEST1] = kstest2(ydd(tx==0),ydd(tx==1)) % two-sample KS stat
+		whos TEST1 
+		mean(TEST1)
+
 
 		%  replace outcome variable in DATA with residualized version
 		if TestZero | FindCI 
@@ -108,8 +114,10 @@ function varargout = ri_ci(DATA, outcome, txvars, tau0 , T0, P, varargin) % mode
 	if TestZero 
 		[ pvalue TEST0 ] = ri_estimates(DATA,outcome,txvars,tau0 ...
 			,xvars, model,T0,P ...
-			,TestType,TestSide,TEST1 ...
-			,'GroupVar',groupvar ...
+			, 'TestType', TestType ...
+			, 'TestSide',TestSide ...
+			, 'TestValue', TEST1 ...
+			, 'GroupVar',groupvar ...
 			) ; 
 	end
 
@@ -128,10 +136,25 @@ function varargout = ri_ci(DATA, outcome, txvars, tau0 , T0, P, varargin) % mode
 
 		%  Confirm that p-value at upper bound of search region is below significance threshold
 		if params.Results.CheckBoundaries 
-			[p , ~ , ~ ] = ri_estimates(DATA, outcome,txvars,ub,xvars, model,T0,P,TestType,'right',TEST1,'GroupVar',groupvar); 
-			if p > SignificanceLevel/2
-				error('Initial value for upper bound of CI not big enough.')
-			end
+			% p = 1 ; % initializing 
+			% while p > SignificanceLevel/2 
+				[p,TEST0] = ri_estimates( ...
+					DATA, outcome,txvars,ub,xvars, model ...
+					, T0, P  ...
+					, 'TestType', TestType ...
+					, 'TestSide' , 'twosided' ... % TODO: switch to right' ...
+					, 'TestValue', TEST1 ...
+					,'GroupVar',groupvar ...
+					); 
+				if p > SignificanceLevel/2
+					sprintf('You had a test value of %0.2f', TEST1)
+					ksdensity(TEST0)
+					sprintf('Initial attempt at upper bound %0.2f yielded p-value of %0.12f',ub,p)
+					error('Initial value for upper bound of CI not high enough.')
+					% sprintf('Initial value for upper bound of CI not big enough. Updating...')
+					% ub = ub + (ub-middle) ; % updating upper boundary, try again.
+				end
+			% end
 		end
 
 		QUERIES_UB = NaN(MaxQueries,2); 
@@ -140,7 +163,14 @@ function varargout = ri_ci(DATA, outcome, txvars, tau0 , T0, P, varargin) % mode
 		while q <= MaxQueries & stepsize >= MinStepSize % TODO: add step-size constraint.
 			% fprintf('This is counter number %i \n', q)
 			QUERIES_UB(q,1) = middle;
-			[p , ~ , ~ ] = ri_estimates(DATA, outcome,txvars,middle,xvars, model,T0,P,TestType,'right',TEST1,'GroupVar',groupvar); 
+			[p , ~ , ~ ] = ri_estimates( ...
+				DATA, outcome,txvars,middle,xvars, model ...
+				,T0,P ... 
+				, 'TestType', TestType ... 
+				,'TestSide', 'twosided' ... % 'right' ...
+				, 'TestValue',TEST1 ...
+				,'GroupVar',groupvar ...
+				); 
 			QUERIES_UB(q,2) = p;
 
 			%  If reject, move left.  Otherwise, move right.
@@ -170,7 +200,11 @@ function varargout = ri_ci(DATA, outcome, txvars, tau0 , T0, P, varargin) % mode
 
 		%  Confirm that p-value at lower bound of search region is below significance threshold
 		if params.Results.CheckBoundaries 
-			[p , ~ , ~ ] = ri_estimates(DATA, outcome,txvars,lb, xvars, model,T0,P,TestType,'left',TEST1,'GroupVar',groupvar); 
+			[p , ~ , ~ ] = ri_estimates(DATA, outcome,txvars,lb, xvars, model,T0,P ...
+				,'TestType', TestType ... 
+				,'TestSide', 'twosided' ... % change back to 'left'
+				,'TestValue',TEST1 ...
+				,'GroupVar',groupvar); 
 			if p > SignificanceLevel/2
 				error('Initial value for lower bound of CI not low enough.')
 			end
@@ -182,7 +216,7 @@ function varargout = ri_ci(DATA, outcome, txvars, tau0 , T0, P, varargin) % mode
 		while q <= MaxQueries & stepsize >= MinStepSize 
 			%  fprintf('This is counter number %i \n', q)
 			QUERIES_LB(q,1) = middle;
-			[p , ~ , ~ ] = ri_estimates(DATA, outcome,txvars,middle, xvars, model,T0,P,TestType,'left',TEST1,'GroupVar',groupvar); 
+			[p , ~ , ~ ] = ri_estimates(DATA, outcome,txvars,middle, xvars, model,T0,P,'TestType',TestType,'TestSide','left','TestValue',TEST1,'GroupVar',groupvar); 
 			QUERIES_LB(q,2) = p;
 
 			%  If reject, move left.  Otherwise, move right.
@@ -219,73 +253,4 @@ function varargout = ri_ci(DATA, outcome, txvars, tau0 , T0, P, varargin) % mode
 	if nargout >= 6 , varargout{6} = QUERIES_LB ; end 
 end
 
-
-%  Subfunction to conduct RI for a particular value
-function [pvalue TEST0 y0 ] = ri_estimates(DATA,outcome,txvars,tau0,xvars, model, T0, P,TestType,TestSide,TEST1,varargin)
-	%  p-value for hypothesized sharp null.
-
-	%  Unpack.
-	options = inputParser ; 
-	addOptional(options,'GroupVar',{});
-	addOptional(options,'TheTx',{}) 
-	parse(options,varargin{:}); 
-	groupvar = options.Results.GroupVar; 
-	theTx = options.Results.TheTx ;
-
-	%  Run DGP in reverse to get y0
-	y0 = table2array(DATA(:,outcome)) - table2array(DATA(:,txvars)) * tau0' ;
-
-	%  Now, loop over feasible randomizations, impose treatment effect, re-estimate, and extract test statistic
-	if strcmp(model,'lm'), x = table2array(DATA(:,xvars)); end % for speed.
-
-	for pp = 1 : P
-
-		%  Impose hypothesized DGP
-		ystar = y0 + T0(:,pp,:) * tau0' ; % accmmodates possibliity of multiple treatment variables
-
-		%  Estimate model and collect test statistic
-		if strcmp(model,'lm')
-			lm = fitlm([permute(T0(:,pp,:),[1 3 2]) , x], ystar);
-			testStat = table2array( ...
-				lm.Coefficients(2:1+length(txvars) ... % leaving room for constant term
-				, [TestType]) ...
-				)';
-		elseif strcmp(model,'rereg') 
-			DATA.ystar = ystar ; % rereg() syntax requires this to be part of the table.
-			DATA(:,txvars) = array2table(permute(T0(:,pp,:),[1 3 2])) ; 
-			result = rereg(DATA,{'ystar'},[txvars xvars],groupvar);
-			testStat = table2array(result(txvars, TestType))';
-		elseif strcmp(model,'ks') 
-			%  FOR THE KS TEST, NEED TO SPECIFY ONE-SIDED TESTS HERE. 
-			if length(txvars) > 1 
-				tx = T0(:,pp,find(strcmp(txvars,theTx)))
-				%  TODO:  For the KS test, when multiple treatment variables, need to residualize outcome to remove this as a potential source of bias here.
-			else 
-				tx = (T0(:,pp,1)); 
-			end
-			% if strcmp(TestSide,'right')
-			% 	[~,~,testStat ] = kstest2(ystar(tx==1),ystar(tx==0),'Tail','larger') ; % two-sample KS stat
-			% elseif strcmp(TestSide,'left')
-			% 	[~,~,testStat ] = kstest2(ystar(tx==1),ystar(tx==0),'Tail','smaller') ; % two-sample KS stat
-			% else 
-				[~,~,testStat ] = kstest2(ystar(tx==1),ystar(tx==0)) ; % two-sample KS stat
-			% end
-		end
-		TEST0(pp,:) = testStat;
-
-	end
-
-	%  get p-value
-	if strcmp(model,'ks')
-		pvalue = mean(TEST0 > TEST1) ; % For KS test, one-sided testing is handled in the evaluation of the test statistic itself.
-	else
-		if ~strcmp(TestSide(1), 'right') , p_left = mean(TEST0 < repmat(TEST1,P,1)) ; end
-		if ~strcmp(TestSide(1), 'left') ,  p_right = mean(TEST0 > repmat(TEST1,P,1)) ; end
-		if strcmp(TestSide(1), 'right'), pvalue = p_right;
-		elseif strcmp(TestSide(1), 'left'), pvalue = p_left; 
-		else pvalue = min(2*min(p_left,p_right),1) ;
-		end
-	end
-
-end
 
