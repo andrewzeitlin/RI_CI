@@ -44,24 +44,16 @@ function [pvalue TEST0 y0 ] = ri_estimates(DATA,outcome,txvars,tau0,xvars, model
 			DATA(:,txvars) = array2table(permute(T0(:,pp,:),[1 3 2])) ; 
 			result = rereg(DATA,{'ystar'},[txvars xvars],groupvar);
 			testStat = table2array(result(txvars, TestType))';
-		elseif strcmp(model,'ks') || strcmp(model,'oks_geq') || strcmp(model,'oks_leq') 
-			%  FOR THE KS TEST, NEED TO SPECIFY ONE-SIDED TESTS HERE. 
+		elseif strcmp(model,'ks') %
 			if length(txvars) > 1 
 				tx = T0(:,pp,find(strcmp(txvars,theTx)))
 				%  TODO:  For the KS test, when multiple treatment variables, need to residualize outcome to remove this as a potential source of bias here.
 			else 
 				tx = (T0(:,pp)); 
 			end
-			if strcmp(model,'ks')
-				[~,~,testStat ] = kstest2(ystar(tx==1),ystar(tx==0)) ; % two-sample KS stat
-			elseif strcmp(model,'oks_geq')
-				[~,~,testStat ] = kstest2(ystar(tx==1),ystar(tx==0),'Tail','smaller') ; % Alt: y1 > y0 
-			elseif strcmp(model,'oks_leq') 
-			 	[~,~,testStat ] = kstest2(ystar(tx==1),ystar(tx==0),'Tail','larger') ; %  Alt: y1 < y0
-			end
+			[~,~,testStat ] = kstest2(ystar(tx==1),ystar(tx==0)) ; % two-sample KS stat
 		end
 		TEST0(pp,:) = testStat;
-
 	end
 
 	%  Calculate left and right tails as required 
