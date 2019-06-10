@@ -16,6 +16,11 @@ function [pvalue TEST0 y0 ] = ri_estimates(DATA,outcome,txvars,tau0,xvars, model
 	TestValue = options.Results.TestValue; 
 	TestType = options.Results.TestType; 
 
+	%  Check inputs
+	if length(TestValue) == 0 
+		error('Must pass a value of the test statistic estimated under the true assignment to ri_estimates() as named parameter TestValue.')
+	end
+
 	%  Run DGP in reverse to get y0
 	y0 = table2array(DATA(:,outcome)) - table2array(DATA(:,txvars)) * tau0' ;
 
@@ -39,36 +44,34 @@ function [pvalue TEST0 y0 ] = ri_estimates(DATA,outcome,txvars,tau0,xvars, model
 			DATA(:,txvars) = array2table(permute(T0(:,pp,:),[1 3 2])) ; 
 			result = rereg(DATA,{'ystar'},[txvars xvars],groupvar);
 			testStat = table2array(result(txvars, TestType))';
-		elseif strcmp(model,'ks') 
+		elseif strcmp(model,'ks') || strcmp(model,'oks_geq') || strcmp(model,'oks_leq') 
 			%  FOR THE KS TEST, NEED TO SPECIFY ONE-SIDED TESTS HERE. 
 			if length(txvars) > 1 
 				tx = T0(:,pp,find(strcmp(txvars,theTx)))
 				%  TODO:  For the KS test, when multiple treatment variables, need to residualize outcome to remove this as a potential source of bias here.
 			else 
-				tx = (T0(:,pp,1)); 
+				tx = (T0(:,pp)); 
 			end
-			% if strcmp(TestSide,'right')
-			% 	[~,~,testStat ] = kstest2(ystar(tx==1),ystar(tx==0),'Tail','larger') ; % two-sample KS stat
-			% elseif strcmp(TestSide,'left')
-			% 	[~,~,testStat ] = kstest2(ystar(tx==1),ystar(tx==0),'Tail','smaller') ; % two-sample KS stat
-			% else 
+			if strcmp(model,'ks')
 				[~,~,testStat ] = kstest2(ystar(tx==1),ystar(tx==0)) ; % two-sample KS stat
-			% end
+			elseif strcmp(model,'oks_geq')
+				[~,~,testStat ] = kstest2(ystar(tx==1),ystar(tx==0),'Tail','smaller') ; % Alt: y1 > y0 
+			elseif strcmp(model,'oks_leq') 
+			 	[~,~,testStat ] = kstest2(ystar(tx==1),ystar(tx==0),'Tail','larger') ; %  Alt: y1 < y0
+			end
 		end
 		TEST0(pp,:) = testStat;
 
 	end
 
-	%  get p-value
-	if strcmp(model,'ks')
-		pvalue = mean(TEST0 > TestValue) ; % For KS test, one-sided testing is handled in the evaluation of the test statistic itself.
-	else
-		if ~strcmp(TestSide(1), 'right') , p_left = mean(TEST0 < repmat(TestValue,P,1)) ; end
-		if ~strcmp(TestSide(1), 'left') ,  p_right = mean(TEST0 > repmat(TestValue,P,1)) ; end
-		if strcmp(TestSide(1), 'right'), pvalue = p_right;
-		elseif strcmp(TestSide(1), 'left'), pvalue = p_left; 
-		else pvalue = min(2*min(p_left,p_right),1) ;
-		end
+	%  Calculate left and right tails as required 
+	if ~strcmp(TestSide(1), 'right') , p_left = mean(TEST0 < repmat(TestValue,P,1)) ; end
+	if ~strcmp(TestSide(1), 'left') ,  p_right = mean(TEST0 > repmat(TestValue,P,1)) ; end
+
+	%  Report the appropriate test statistic
+	if strcmp(TestSide(1), 'right'), pvalue = p_right;
+	elseif strcmp(TestSide(1), 'left'), pvalue = p_left; 
+	else pvalue = min(2*min(p_left,p_right),1) ;
 	end
 
 end

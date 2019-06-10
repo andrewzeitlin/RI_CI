@@ -93,7 +93,7 @@ x_g = kron(x_g,ones(n,1));
 g = kron(g,ones(n,1));
 
 %  constant additive treatment effect
-tau = 10; 
+tau = 1; 
 
 %  remainder of DGP at individual level
 e_0i = randn(G*n,1);
@@ -110,6 +110,8 @@ lm = fitlm(D,'y~ t + x_i + x_g') % ([t x_g x_i ],y)
 %beta_re = rereg(y,[t , x_g, x_i],g)  % <- ols syntax:  assumes data are in arrays rather than tables.
 re = rereg(D,{'y'},{'t' 'x_i' 'x_g'},{'g'})
 
+
+%---  RE regression ---%
 clear rereg
 clear ri_ci
 tic
@@ -137,6 +139,8 @@ line([CI(1) CI(1)],get(hax,'YLim'),'Color','red'); % [0 1])
 line([CI(2) CI(2)],get(hax,'YLim'),'Color','red'); % [0 1])
 hold off
 
+
+%--- KS TEST  ---%
 clear ri_ci
 tic
 [pval ] = ri_ci(D,{'y'},{'t'}, T0, R ...
@@ -145,7 +149,6 @@ tic
     , 'FindCI', false ...
     )
 toc
-
 
 clear ri_ci
 tau0 = 0 ;
@@ -186,4 +189,81 @@ end
 figure(9)
 clf
 ksdensity(KS0)
+
+%  Understanding why is the KS stat so large for randomizations that are not the true randomization?
+figure(10)
+clf 
+hold on 
+h1 = cdfplot(y(T0(:,11)==1))
+h2 = cdfplot(y(T0(:,11)==0))
+hold off 
+
+[pval,~,test1,test0] = ri_ci(D,{'y'},{'t'},T0,100,'Model',{'ks'}); 
+
+figure(99)
+clf
+ksdensity(test0)
+%  that seems fine
+%  So why are we failing to reject the UB?    
+
+lm = fitlm(D.t,D.y)
+beta = table2array(lm.Coefficients(2,'Estimate'))
+se = table2array(lm.Coefficients(2,'SE'))
+ub = beta + 10*1.96*se ; 
+
+%  This is finding an upper bound
+TRIALS = [beta:0.01:2*beta]';
+PVALS = NaN(size(TRIALS));
+KS0 = NaN(length(TRIALS),100);
+
+[~,~,ks1_ub] = kstest2(table2array(D(D.t==1,{'y'})),table2array(D(D.t==0,{'y'})),'Tail','smaller')
+
+clear ri_estimates
+for tt = 1:length(TRIALS)
+    [p test0] = ri_estimates(D,{'y'},{'t'},TRIALS(tt),{},{'oks_geq'},T0,100,'TestValue',ks1_ub ... %,'TestSide','right'
+        ); 
+    PVALS(tt) = p;
+    KS0(tt,:) = test0';
+end
+
+figure(97)
+clf 
+hax = axes;
+scatter(TRIALS,PVALS)
+line([beta beta],get(hax,'YLim'),'Color','red'); % [0 1])
+
+
+%  This is finding a lower bound
+TRIALS_LB = [beta:-0.05:beta - 3*beta]';
+PVALS_LB = NaN(size(TRIALS_LB)); 
+[~,~,ks1] = kstest2(table2array(D(D.t==1,{'y'})),table2array(D(D.t==0,{'y'})),'Tail','larger')
+for tt = 1:length(TRIALS)
+    p  = ri_estimates(D,{'y'},{'t'},TRIALS(tt),{},'ks',T0,100,'TestValue',ks1,'TestSide','left'); 
+    PVALS_LB(tt) = p;
+end
+
+figure(98)
+clf 
+scatter(TRIALS_LB,PVALS_LB)
+
+
+%%  Let's just see if we can generate a distribution for the KS statistic under the null
+[~,~,ks] = kstest2(y(t==1),y(t==0),'Tail','smaller');;
+
+tau0 = 1.5 ;
+y0hat = y - t*tau0; 
+KS = NaN(P,1);
+for pp = 1:P
+    ystar = y0hat + T0(:,pp)*tau0 ; % using the true y0, since this is what we would get if we use the true tau anyway.
+    [~,~,KS(pp)] = kstest2(ystar(T0(:,pp)==1),ystar(T0(:,pp)==0),'Tail','smaller');
+end 
+
+figure(11)
+clf
+hax = axes;
+ksdensity(KS)
+line([ks ks],get(hax,'YLim'),'Color','red'); % [0 1])
+
+
+
 

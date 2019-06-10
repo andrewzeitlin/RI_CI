@@ -93,9 +93,6 @@ function varargout = ri_ci(DATA, outcome, txvars, T0, P, varargin) % model, stat
 			ydd = ydd - mean(ydd); 
 		end
 		[~,~,TEST1] = kstest2(ydd(tx==0),ydd(tx==1)) % two-sample KS stat
-		whos TEST1 
-		mean(TEST1)
-
 
 		%  replace outcome variable in DATA with residualized version
 		if TestZero | FindCI 
@@ -134,12 +131,22 @@ function varargout = ri_ci(DATA, outcome, txvars, T0, P, varargin) % model, stat
 		ub = beta + 10*1.96*se ; 
 		middle = (lb + ub) / 2 ; 
 
+		%  For KS model, test stat for upper and lower bound should differ. All others the same.
+		if strcmp(model,'ks')
+			model_ub = 'oks_geq';
+			model_lb = 'oks_leq' ;
+		else
+			model_ub = model; 
+			model_lb = model; 
+		end 
+
 		%  Confirm that p-value at upper bound of search region is below significance threshold
 		if params.Results.CheckBoundaries 
 			% p = 1 ; % initializing 
 			% while p > SignificanceLevel/2 
-				[p,TEST0] = ri_estimates( ...
-					DATA, outcome,txvars,ub,xvars, model ...
+				[p] = ri_estimates( ...
+					DATA, outcome,txvars,ub,xvars ...
+					, model_ub ...
 					, T0, P  ...
 					, 'TestType', TestType ...
 					, 'TestSide' , 'twosided' ... % TODO: switch to right' ...
@@ -164,7 +171,7 @@ function varargout = ri_ci(DATA, outcome, txvars, T0, P, varargin) % model, stat
 			% fprintf('This is counter number %i \n', q)
 			QUERIES_UB(q,1) = middle;
 			[p , ~ , ~ ] = ri_estimates( ...
-				DATA, outcome,txvars,middle,xvars, model ...
+				DATA, outcome,txvars,middle,xvars, model_ub ...
 				,T0,P ... 
 				, 'TestType', TestType ... 
 				,'TestSide', 'twosided' ... % 'right' ...
@@ -200,7 +207,7 @@ function varargout = ri_ci(DATA, outcome, txvars, T0, P, varargin) % model, stat
 
 		%  Confirm that p-value at lower bound of search region is below significance threshold
 		if params.Results.CheckBoundaries 
-			[p , ~ , ~ ] = ri_estimates(DATA, outcome,txvars,lb, xvars, model,T0,P ...
+			[p , ~ , ~ ] = ri_estimates(DATA, outcome,txvars,lb, xvars, model_lb,T0,P ...
 				,'TestType', TestType ... 
 				,'TestSide', 'twosided' ... % change back to 'left'
 				,'TestValue',TEST1 ...
@@ -216,7 +223,7 @@ function varargout = ri_ci(DATA, outcome, txvars, T0, P, varargin) % model, stat
 		while q <= MaxQueries & stepsize >= MinStepSize 
 			%  fprintf('This is counter number %i \n', q)
 			QUERIES_LB(q,1) = middle;
-			[p , ~ , ~ ] = ri_estimates(DATA, outcome,txvars,middle, xvars, model,T0,P,'TestType',TestType,'TestSide','left','TestValue',TEST1,'GroupVar',groupvar); 
+			[p , ~ , ~ ] = ri_estimates(DATA, outcome,txvars,middle, xvars, model_lb,T0,P,'TestType',TestType,'TestSide','twosided','TestValue',TEST1,'GroupVar',groupvar); 
 			QUERIES_LB(q,2) = p;
 
 			%  If reject, move left.  Otherwise, move right.
@@ -252,5 +259,3 @@ function varargout = ri_ci(DATA, outcome, txvars, T0, P, varargin) % model, stat
 	if nargout >= 5 , varargout{5} = QUERIES_UB ; end
 	if nargout >= 6 , varargout{6} = QUERIES_LB ; end 
 end
-
-
