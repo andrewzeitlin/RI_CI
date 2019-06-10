@@ -179,6 +179,8 @@ line([b b],get(hax,'YLim'),'Color','blue'); % [0 1])
 hold off
 
 
+
+%  Proof of concepts for upper and lower bounds
 lm = fitlm(D.t,D.y)
 beta = table2array(lm.Coefficients(2,'Estimate'))
 se = table2array(lm.Coefficients(2,'SE'))
@@ -189,58 +191,38 @@ TRIALS = [beta:0.01:2*beta]';
 PVALS = NaN(size(TRIALS));
 KS0 = NaN(length(TRIALS),100);
 
-[~,~,ks1_ub] = kstest2(table2array(D(D.t==1,{'y'})),table2array(D(D.t==0,{'y'})),'Tail','smaller')
+[~,~,ks1_ub] = kstest2(table2array(D(D.t==1,{'y'})),table2array(D(D.t==0,{'y'})) ... ,'Tail','smaller'
+    )
 
 clear ri_estimates
 for tt = 1:length(TRIALS)
-    [p test0] = ri_estimates(D,{'y'},{'t'},TRIALS(tt),{},{'oks_geq'},T0,100,'TestValue',ks1_ub ... %,'TestSide','right'
+    [p test0] = ri_estimates(D,{'y'},{'t'},TRIALS(tt),{}, 'ks' ... ,{'oks_geq'}
+    ,T0,100,'TestValue',ks1_ub ... %,'TestSide','right'
         ); 
     PVALS(tt) = p;
     KS0(tt,:) = test0';
 end
 
-figure(97)
-clf 
-hax = axes;
-scatter(TRIALS,PVALS)
-line([beta beta],get(hax,'YLim'),'Color','red'); % [0 1])
-
 
 %  This is finding a lower bound
 TRIALS_LB = [beta:-0.01: beta - beta]';
 PVALS_LB = NaN(size(TRIALS_LB)); 
-[~,~,ks1_lb] = kstest2(table2array(D(D.t==1,{'y'})),table2array(D(D.t==0,{'y'})),'Tail','larger')
+[~,~,ks1_lb] = kstest2(table2array(D(D.t==1,{'y'})),table2array(D(D.t==0,{'y'}))) % ,'Tail','smaller')
 
 for tt = 1:length(TRIALS)
-    p  = ri_estimates(D,{'y'},{'t'},TRIALS(tt),{},'oks_leq',T0,100,'TestValue',ks1_lb ... % ,'TestSide','left'
+    p  = ri_estimates(D,{'y'},{'t'},TRIALS(tt),{},'ks' ... % 'oks_geq'
+        ,T0,100,'TestValue',ks1_lb ... % ,'TestSide','left'
         ); 
     PVALS_LB(tt) = p;
 end
 
-figure(98)
+
+figure(99)
 clf 
-hax = axes
-scatter(TRIALS_LB,PVALS_LB)
-line([beta beta],get(hax,'YLim'),'Color','red');
-
-
-%%  Let's just see if we can generate a distribution for the KS statistic under the null
-[~,~,ks] = kstest2(y(t==1),y(t==0),'Tail','smaller');;
-
-tau0 = 1.5 ;
-y0hat = y - t*tau0; 
-KS = NaN(P,1);
-for pp = 1:P
-    ystar = y0hat + T0(:,pp)*tau0 ; % using the true y0, since this is what we would get if we use the true tau anyway.
-    [~,~,KS(pp)] = kstest2(ystar(T0(:,pp)==1),ystar(T0(:,pp)==0),'Tail','smaller');
-end 
-
-figure(11)
-clf
 hax = axes;
-ksdensity(KS)
-line([ks ks],get(hax,'YLim'),'Color','red'); % [0 1])
-
-
-
+hold on 
+scatter(TRIALS,PVALS)
+scatter(TRIALS_LB,PVALS_LB)
+line([beta beta],get(hax,'YLim'),'Color','red'); % [0 1])
+hold off 
 
