@@ -160,7 +160,11 @@ tic
     );  % ,~,~,~,CI ,Q_UB, Q_LB 
 toc
 
+
 [Q_UB, Q_LB]
+
+lm = fitlm(D.t,D.y); 
+b=table2array(lm.Coefficients(2,'Estimate'));
 
 figure(5)
 clf
@@ -170,41 +174,10 @@ scatter(Q_UB(:,1),Q_UB(:,2))
 scatter(Q_LB(:,1),Q_LB(:,2))
 line([CI(1) CI(1)],get(hax,'YLim'),'Color','red'); % [0 1])
 line([CI(2) CI(2)],get(hax,'YLim'),'Color','red'); % [0 1])
+line([b b],get(hax,'YLim'),'Color','blue'); % [0 1])
+
 hold off
 
-
-
-% a little demo to amke sure we are correctly interpreting the KS stat
-P = 100;
-KS0 = NaN(P,1);
-for pp = 1:P 
-    [~,~,ks] = kstest2( ...
-        y(T0(:,pp)==0) ...
-        , ...
-        y(T0(:,pp) ==1) ...
-        );
-    KS0(pp,1) = ks;
-end
-[~,~,ks] = kstest2(y(t==1),y(t==0))
-figure(9)
-clf
-ksdensity(KS0)
-
-%  Understanding why is the KS stat so large for randomizations that are not the true randomization?
-figure(10)
-clf 
-hold on 
-h1 = cdfplot(y(T0(:,11)==1))
-h2 = cdfplot(y(T0(:,11)==0))
-hold off 
-
-[pval,~,test1,test0] = ri_ci(D,{'y'},{'t'},T0,100,'Model',{'ks'}); 
-
-figure(99)
-clf
-ksdensity(test0)
-%  that seems fine
-%  So why are we failing to reject the UB?    
 
 lm = fitlm(D.t,D.y)
 beta = table2array(lm.Coefficients(2,'Estimate'))
@@ -234,17 +207,21 @@ line([beta beta],get(hax,'YLim'),'Color','red'); % [0 1])
 
 
 %  This is finding a lower bound
-TRIALS_LB = [beta:-0.05:beta - 3*beta]';
+TRIALS_LB = [beta:-0.01: beta - beta]';
 PVALS_LB = NaN(size(TRIALS_LB)); 
-[~,~,ks1] = kstest2(table2array(D(D.t==1,{'y'})),table2array(D(D.t==0,{'y'})),'Tail','larger')
+[~,~,ks1_lb] = kstest2(table2array(D(D.t==1,{'y'})),table2array(D(D.t==0,{'y'})),'Tail','larger')
+
 for tt = 1:length(TRIALS)
-    p  = ri_estimates(D,{'y'},{'t'},TRIALS(tt),{},'ks',T0,100,'TestValue',ks1,'TestSide','left'); 
+    p  = ri_estimates(D,{'y'},{'t'},TRIALS(tt),{},'oks_leq',T0,100,'TestValue',ks1_lb ... % ,'TestSide','left'
+        ); 
     PVALS_LB(tt) = p;
 end
 
 figure(98)
 clf 
+hax = axes
 scatter(TRIALS_LB,PVALS_LB)
+line([beta beta],get(hax,'YLim'),'Color','red');
 
 
 %%  Let's just see if we can generate a distribution for the KS statistic under the null

@@ -100,6 +100,9 @@ function varargout = ri_ci(DATA, outcome, txvars, T0, P, varargin) % model, stat
 		end
 
 		if FindCI 
+			[~,~,TEST1_ub] = kstest2(ydd(tx==1),ydd(tx==0),'Tail','smaller');
+			[~,~,TEST1_lb] = kstest2(ydd(tx==1),ydd(tx==0),'Tail','larger');
+
 			%  use simple linear regression to initialize search region.
 			lm = fitlm(tx,ydd);
 			beta = table2array(lm.Coefficients(2,'Estimate')); 
@@ -135,7 +138,10 @@ function varargout = ri_ci(DATA, outcome, txvars, T0, P, varargin) % model, stat
 		if strcmp(model,'ks')
 			model_ub = 'oks_geq';
 			model_lb = 'oks_leq' ;
+			%  Test statistics for one-sided testing already established above for this case.
 		else
+			TEST1_ub = TEST1; 
+			TEST1_lb = TEST1;
 			model_ub = model; 
 			model_lb = model; 
 		end 
@@ -150,11 +156,11 @@ function varargout = ri_ci(DATA, outcome, txvars, T0, P, varargin) % model, stat
 					, T0, P  ...
 					, 'TestType', TestType ...
 					, 'TestSide' , 'twosided' ... % TODO: switch to right' ...
-					, 'TestValue', TEST1 ...
+					, 'TestValue', TEST1_ub ...
 					,'GroupVar',groupvar ...
 					); 
 				if p > SignificanceLevel/2
-					sprintf('You had a test value of %0.2f', TEST1)
+					sprintf('You had a test value of %0.2f', TEST1_ub)
 					ksdensity(TEST0)
 					sprintf('Initial attempt at upper bound %0.2f yielded p-value of %0.12f',ub,p)
 					error('Initial value for upper bound of CI not high enough.')
@@ -175,7 +181,7 @@ function varargout = ri_ci(DATA, outcome, txvars, T0, P, varargin) % model, stat
 				,T0,P ... 
 				, 'TestType', TestType ... 
 				,'TestSide', 'twosided' ... % 'right' ...
-				, 'TestValue',TEST1 ...
+				, 'TestValue',TEST1_ub ...
 				,'GroupVar',groupvar ...
 				); 
 			QUERIES_UB(q,2) = p;
@@ -210,7 +216,7 @@ function varargout = ri_ci(DATA, outcome, txvars, T0, P, varargin) % model, stat
 			[p , ~ , ~ ] = ri_estimates(DATA, outcome,txvars,lb, xvars, model_lb,T0,P ...
 				,'TestType', TestType ... 
 				,'TestSide', 'twosided' ... % change back to 'left'
-				,'TestValue',TEST1 ...
+				,'TestValue',TEST1_lb ...
 				,'GroupVar',groupvar); 
 			if p > SignificanceLevel/2
 				error('Initial value for lower bound of CI not low enough.')
@@ -223,7 +229,7 @@ function varargout = ri_ci(DATA, outcome, txvars, T0, P, varargin) % model, stat
 		while q <= MaxQueries & stepsize >= MinStepSize 
 			%  fprintf('This is counter number %i \n', q)
 			QUERIES_LB(q,1) = middle;
-			[p , ~ , ~ ] = ri_estimates(DATA, outcome,txvars,middle, xvars, model_lb,T0,P,'TestType',TestType,'TestSide','twosided','TestValue',TEST1,'GroupVar',groupvar); 
+			[p , ~ , ~ ] = ri_estimates(DATA, outcome,txvars,middle, xvars, model_lb,T0,P,'TestType',TestType,'TestSide','twosided','TestValue',TEST1_lb,'GroupVar',groupvar); 
 			QUERIES_LB(q,2) = p;
 
 			%  If reject, move left.  Otherwise, move right.
