@@ -16,20 +16,15 @@ function [pvalue TEST0 y0 ] = ri_estimates(DATA,outcome,txvars,tau0,xvars, model
 	TestValue = options.Results.TestValue; 
 	TestType = options.Results.TestType; 
 
-	%  Check inputs
-	if length(TestValue) == 0 
-		error('Must pass a value of the test statistic estimated under the true assignment to ri_estimates() as named parameter TestValue.')
-	end
-
 	%  Run DGP in reverse to get y0
 	y0 = table2array(DATA(:,outcome)) - table2array(DATA(:,txvars)) * tau0' ;
 
 	%  If model is ks and TestValue has not been specified, estimate KS statistic on the hypothesized y0
 	if strcmp(model,'ks') && length(TestValue) == 0
 		if length(txvars) > 1 
-			tx = txvars(find(strcmp(txvars,theTx)));
+			tx = table2array(DATA(:,txvars(find(strcmp(txvars,theTx)))));
 		else 
-			tx = txvars; 
+			tx = table2array(DATA(:,txvars)); 
 		end
 		[~,~,TestValue] = kstest2(y0(tx==1),y0(tx==0));
 	end
@@ -46,7 +41,7 @@ function [pvalue TEST0 y0 ] = ri_estimates(DATA,outcome,txvars,tau0,xvars, model
 			else 
 				tx = (T0(:,pp)); 
 			end
-			[~,~,testStat ] = kstest2(ystar(tx==1),ystar(tx==0)) ; % two-sample KS stat
+			[~,~,testStat ] = kstest2(y0(tx==1),y0(tx==0)) ; % two-sample KS stat
 		else 
 			%  Impose hypothesized DGP
 			ystar = y0 + T0(:,pp,:) * tau0' ; % accommodates possibliity of multiple treatment variables
