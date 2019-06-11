@@ -58,7 +58,7 @@ function [pvalue TEST0 y0 ] = ri_estimates(DATA,outcome,txvars,tau0,xvars, model
 					lm.Coefficients(2:1+length(txvars) ... % leaving room for constant term
 					, [TestType]) ...
 					)';
-			elseif strcmp(model,'rereg') 
+			elseif strcmp(model,'re') 
 				DATA.ystar = ystar ; % rereg() syntax requires this to be part of the table.
 				DATA(:,txvars) = array2table(permute(T0(:,pp,:),[1 3 2])) ; 
 				result = rereg(DATA,{'ystar'},[txvars xvars],groupvar);

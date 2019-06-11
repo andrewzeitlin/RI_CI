@@ -16,16 +16,16 @@ function varargout = ri_ci(DATA, outcome, txvars, T0, P, varargin) % model, stat
 	%  Parse inputs
 	params = inputParser ; 
 	addOptional(params,'Controls',{}); % observational RHS variables
-	addOptional(params,'Model',{'lm'});  			% model type
-	addOptional(params,'TestType',{'tStat'});		%  name of test statistic
-	addOptional(params,'TestSide',{'twosided'}); 	% test type for the primary test
+	addOptional(params,'Model','lm');  			% model type
+	addOptional(params,'TestType','tStat');		%  name of test statistic
+	addOptional(params,'TestSide','twosided'); 	% test type for the primary test
+	addOptional(params,'TestZero',true); 			% to add a test of the zero null. Defaults on.
 	addOptional(params,'FindCI',false);  			%  Switch: locate confidence interval
 	addOptional(params,'CIguess',[0 0]); 			% initial guess for confidence interval. 
 	addOptional(params,'MaxQueries',10); 			% maximum number of trials to find each end of the confidence interval
 	addOptional(params,'MinStepSize',0); 			% minimum step size for stopping rule.
 	addOptional(params,'SignificanceLevel',0.05); 	% alpha for CI
 	addOptional(params,'ShowMainEstimates',false); 	% to replay results of primary estimate.
-	addOptional(params,'TestZero',true); 			% to add a test of the zero null. Defaults on.
 	addOptional(params,'CheckBoundaries',true); 	% check boundaries for CI esitmation.
 	addOptional(params,'GroupVar',{''}); 			% group variable for random effects or clustered estimates
 	addOptional(params,'TheTx',{}); 				% for vector-valued treatments, this cell array contains the name of the treatment of interest.
@@ -33,13 +33,15 @@ function varargout = ri_ci(DATA, outcome, txvars, T0, P, varargin) % model, stat
 	addOptional(params,'Noisily',false); 
 	parse(params,varargin{:}); 
 
-	model = params.Results.Model; 
-	TestZero = params.Results.TestZero; 
-	TestType = params.Results.TestType; 
-	TestSide = params.Results.TestSide;
+	model = {params.Results.Model}; 
+	TestType = {params.Results.TestType}; 
+	TestSide = {params.Results.TestSide};
 	xvars = params.Results.Controls;
 	TheTX = params.Results.TheTx ; 
+
+	TestZero = params.Results.TestZero; 
 	FindCI = params.Results.FindCI ;
+
 	MaxQueries = params.Results.MaxQueries; 
 	MinStepSize = params.Results.MinStepSize; 
 	SignificanceLevel = params.Results.SignificanceLevel;  
@@ -74,7 +76,7 @@ function varargout = ri_ci(DATA, outcome, txvars, T0, P, varargin) % model, stat
 			beta = table2array(lm.Coefficients(2,'Estimate')); 
 			se   = table2array(lm.Coefficients(2,'SE')); 
 		end
-	elseif strcmp(model,'rereg') 
+	elseif strcmp(model,'re') 
 		result = rereg(DATA,outcome,[txvars xvars] ,groupvar )
 		TEST1 = table2array(result([txvars],[TestType]));
 		if FindCI 
@@ -139,7 +141,7 @@ function varargout = ri_ci(DATA, outcome, txvars, T0, P, varargin) % model, stat
 		if params.Results.CheckBoundaries 
 			% p = 1 ; % initializing 
 			% while p > SignificanceLevel/2 
-			if strcmp(model),'ks'
+			if strcmp(model,'ks')
 				p = ri_estimates( ...
 					DATA,outcome,txvars,ub,xvars ...
 					, 'ks' ...
@@ -174,7 +176,7 @@ function varargout = ri_ci(DATA, outcome, txvars, T0, P, varargin) % model, stat
 		while q <= MaxQueries & stepsize >= MinStepSize % TODO: add step-size constraint.
 			% fprintf('This is counter number %i \n', q)
 			QUERIES_UB(q,1) = middle;
-			if strcmp(model),'ks'
+			if strcmp(model,'ks')
 				p = ri_estimates( ...
 					DATA,outcome,txvars,middle,xvars ...
 					, 'ks' ...
@@ -220,7 +222,7 @@ function varargout = ri_ci(DATA, outcome, txvars, T0, P, varargin) % model, stat
 
 		%  Confirm that p-value at lower bound of search region is below significance threshold
 		if params.Results.CheckBoundaries 
-			if strcmp(model),'ks'
+			if strcmp(model,'ks')
 				p = ri_estimates( ...
 					DATA,outcome,txvars,lb,xvars ...
 					, 'ks' ...
@@ -245,7 +247,7 @@ function varargout = ri_ci(DATA, outcome, txvars, T0, P, varargin) % model, stat
 		while q <= MaxQueries & stepsize >= MinStepSize 
 			%  fprintf('This is counter number %i \n', q)
 			QUERIES_LB(q,1) = middle;
-			if strcmp(model),'ks'
+			if strcmp(model,'ks')
 				p = ri_estimates( ...
 					DATA,outcome,txvars,middle,xvars ...
 					, 'ks' ...
