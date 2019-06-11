@@ -93,7 +93,7 @@ x_g = kron(x_g,ones(n,1));
 g = kron(g,ones(n,1));
 
 %  constant additive treatment effect
-tau = 1; 
+tau = 1.5; 
 
 %  remainder of DGP at individual level
 e_0i = randn(G*n,1);
@@ -104,6 +104,22 @@ y = y0 + tau * t;
 
 %  Data to table, for passing to rereg.
 D = array2table([y,t,x_i,x_g,g],'VariableNames',{'y' 't' 'x_i' 'x_g' 'g'});
+
+
+%-- Plotting CDFs of resulting distributions --%
+figure(1) 
+clf 
+hold on 
+h1 =cdfplot(y(t==1))
+h0 =cdfplot(y(t==0))
+hold off 
+
+[~,~,ks_smaller] = kstest2(y(t==1),y(t==0),'Tail','smaller')
+[~,~,ks_larger] = kstest2(y(t==1),y(t==0),'Tail','larger')
+return
+
+
+
 
 clear rereg
 lm = fitlm(D,'y~ t + x_i + x_g') % ([t x_g x_i ],y)
