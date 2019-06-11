@@ -24,27 +24,22 @@ function [pvalue TEST0 y0 ] = ri_estimates(DATA,outcome,txvars,tau0,xvars, model
 	%  Run DGP in reverse to get y0
 	y0 = table2array(DATA(:,outcome)) - table2array(DATA(:,txvars)) * tau0' ;
 
+	%  If model is ks and TestValue has not been specified, estimate KS statistic on the hypothesized y0
+	if strcmp(model,'ks') && length(TestValue) == 0
+		if length(txvars) > 1 
+			tx = txvars(find(strcmp(txvars,theTx)));
+		else 
+			tx = txvars; 
+		end
+		[~,~,TestValue] = kstest2(y0(tx==1),y0(tx==0));
+	end
+
 	%  Now, loop over feasible randomizations, impose treatment effect, re-estimate, and extract test statistic
 	if strcmp(model,'lm'), x = table2array(DATA(:,xvars)); end % for speed.
-
 	for pp = 1 : P
 
-		%  Impose hypothesized DGP
-		ystar = y0 + T0(:,pp,:) * tau0' ; % accommodates possibliity of multiple treatment variables
-
-		%  Estimate model and collect test statistic
-		if strcmp(model,'lm')
-			lm = fitlm([permute(T0(:,pp,:),[1 3 2]) , x], ystar);
-			testStat = table2array( ...
-				lm.Coefficients(2:1+length(txvars) ... % leaving room for constant term
-				, [TestType]) ...
-				)';
-		elseif strcmp(model,'rereg') 
-			DATA.ystar = ystar ; % rereg() syntax requires this to be part of the table.
-			DATA(:,txvars) = array2table(permute(T0(:,pp,:),[1 3 2])) ; 
-			result = rereg(DATA,{'ystar'},[txvars xvars],groupvar);
-			testStat = table2array(result(txvars, TestType))';
-		elseif strcmp(model,'ks') %
+		%  For KS stat, RI based on y0
+		if strcmp(model, 'ks')
 			if length(txvars) > 1 
 				tx = T0(:,pp,find(strcmp(txvars,theTx)))
 				%  TODO:  For the KS test, when multiple treatment variables, need to residualize outcome to remove this as a potential source of bias here.
@@ -52,6 +47,25 @@ function [pvalue TEST0 y0 ] = ri_estimates(DATA,outcome,txvars,tau0,xvars, model
 				tx = (T0(:,pp)); 
 			end
 			[~,~,testStat ] = kstest2(ystar(tx==1),ystar(tx==0)) ; % two-sample KS stat
+		else 
+			%  Impose hypothesized DGP
+			ystar = y0 + T0(:,pp,:) * tau0' ; % accommodates possibliity of multiple treatment variables
+
+			%  Estimate model and collect test statistic
+			if strcmp(model,'lm')
+				lm = fitlm([permute(T0(:,pp,:),[1 3 2]) , x], ystar);
+				testStat = table2array( ...
+					lm.Coefficients(2:1+length(txvars) ... % leaving room for constant term
+					, [TestType]) ...
+					)';
+			elseif strcmp(model,'rereg') 
+				DATA.ystar = ystar ; % rereg() syntax requires this to be part of the table.
+				DATA(:,txvars) = array2table(permute(T0(:,pp,:),[1 3 2])) ; 
+				result = rereg(DATA,{'ystar'},[txvars xvars],groupvar);
+				testStat = table2array(result(txvars, TestType))';
+			else
+				error('Must specify a valid model')
+			end
 		end
 		TEST0(pp,:) = testStat;
 	end
