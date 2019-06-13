@@ -21,7 +21,7 @@ function varargout = ri_ci(DATA, outcome, txvars, T0, P, varargin) % model, stat
 	addOptional(params,'TestSide','twosided'); 	% test type for the primary test
 	addOptional(params,'TestZero',true); 			% to add a test of the zero null. Defaults on.
 	addOptional(params,'FindCI',false);  			%  Switch: locate confidence interval
-	addOptional(params,'CIguess',[0 0]); 			% initial guess for confidence interval. 
+	addOptional(params,'CIguess',[0 0 0 0 ]);		% initial guess for confidence interval. Specified as a range around the lower bound (1st and second arguments) and a range around the upper bound (2nd and third arguments)
 	addOptional(params,'MaxQueries',10); 			% maximum number of trials to find each end of the confidence interval
 	addOptional(params,'MinStepSize',0); 			% minimum step size for stopping rule.
 	addOptional(params,'SignificanceLevel',0.05); 	% alpha for CI
@@ -41,6 +41,7 @@ function varargout = ri_ci(DATA, outcome, txvars, T0, P, varargin) % model, stat
 
 	TestZero = params.Results.TestZero; 
 	FindCI = params.Results.FindCI ;
+	CIguess = sort(params.Results.CIguess); % forcing ascending order.
 
 	MaxQueries = params.Results.MaxQueries; 
 	MinStepSize = params.Results.MinStepSize; 
@@ -95,7 +96,7 @@ function varargout = ri_ci(DATA, outcome, txvars, T0, P, varargin) % model, stat
 			ydd = table2array(DATA(:,outcome));
 			ydd = ydd - mean(ydd); 
 		end
-		[~,~,TEST1] = kstest2(ydd(tx==0),ydd(tx==1)) % two-sample KS stat
+		[~,~,TEST1] = kstest2(ydd(tx==0),ydd(tx==1)); % two-sample KS stat
 
 		%  For the KS test with any subsequent testing
 		%  replace outcome variable in DATA with residualized version
@@ -133,8 +134,13 @@ function varargout = ri_ci(DATA, outcome, txvars, T0, P, varargin) % model, stat
 	if FindCI 
 
 		%  Find upper boundary of CI. -------------------------------------%
-		lb = beta ;
-		ub = beta + 10*1.96*se ; 
+		if mean(CIguess==0) == 1  % case where no search region has been specified
+			lb = beta ;
+			ub = beta + 10*1.96*se ; 
+		else 
+			lb = CIguess(3);
+			ub = CIguess(4); 
+		end
 		middle = (lb + ub) / 2 ; 
 
 
@@ -217,8 +223,13 @@ function varargout = ri_ci(DATA, outcome, txvars, T0, P, varargin) % model, stat
 		CI_UB = max(QUERIES_UB(QUERIES_UB(:,2) > SignificanceLevel/2, 1)) ; 
 
 		%  Find lower boundary of CI. -------------------------------------%
-		ub = beta ;
-		lb = beta - 10*1.96*se ; 
+		if mean(CIguess==0) == 1  % case where no search region has been specified
+			ub = beta ;
+			lb = beta - 10*1.96*se ; 
+		else 
+			ub = CIguess(2);
+			lb = CIguess(1);
+		end
 		middle = (lb + ub) / 2 ; 
 
 		%  Confirm that p-value at lower bound of search region is below significance threshold
