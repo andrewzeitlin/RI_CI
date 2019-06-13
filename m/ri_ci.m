@@ -59,10 +59,14 @@ function varargout = ri_ci(DATA, outcome, txvars, T0, P, varargin) % model, stat
 	if FindCI & length(txvars)> 1
 		error('Confidence interval search currently supports only one-dimensional treatment.')
 	end
-
 	if size(tau0,1) > size(tau0,2) 
 		error('null treatment vector tau0 should be (1 x K) not (K x 1)');
 	end
+	%  Require parameter TestSide set to right for KS test
+	if strcmp(model,'ks') && ~strcmp(TestSide,'right')
+		error('For the KS test, must specify a right-tailed p-value')
+	end
+
 
 	%  Containers for results 
 	TEST0 = NaN(P,length(txvars)); % to hold null distribution for test statistic.
