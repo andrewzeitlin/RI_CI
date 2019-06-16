@@ -17,7 +17,7 @@ function [pvalue TEST0 y0 ] = ri_estimates(DATA,outcome,txvars,tau0,xvars, model
 	TestType = options.Results.TestType; 
 
 	%  Run DGP in reverse to get y0
-	y0 = table2array(DATA(:,outcome)) - table2array(DATA(:,txvars)) * tau0' ;
+	y0 = table2array(DATA(:,outcome)) - table2array(DATA(:,txvars)) * tau0 ;
 
 	%  If model is ks and TestValue has not been specified, estimate KS statistic on the hypothesized y0
 	if strcmp(model,'ks') && length(TestValue) == 0
@@ -44,20 +44,19 @@ function [pvalue TEST0 y0 ] = ri_estimates(DATA,outcome,txvars,tau0,xvars, model
 			[~,~,testStat ] = kstest2(y0(tx==1),y0(tx==0)) ; % two-sample KS stat
 		else 
 			%  Impose hypothesized DGP
-			ystar = y0 + T0(:,pp,:) * tau0' ; % accommodates possibliity of multiple treatment variables
+			t0 = permute(T0(:,pp,:),[1 3 2]);  % accommodates possibliity of multiple treatment variables
+			ystar = y0 + t0 * tau0 ;
 
 			%  Estimate model and collect test statistic
 			if strcmp(model,'lm')
-				lm = fitlm([permute(T0(:,pp,:),[1 3 2]) , x], ystar);
-				testStat = table2array( ...
-					lm.Coefficients(2:1+length(txvars) ... % leaving room for constant term
-					, [TestType]) ...
-					)';
+				lm = fitlm([t0 , x ], ystar) ; % 
+				testStat = table2array(lm.Coefficients(1+find(strcmp(txvars,theTx)), [TestType]));
+
 			elseif strcmp(model,'re') 
 				DATA.ystar = ystar ; % rereg() syntax requires this to be part of the table.
-				DATA(:,txvars) = array2table(permute(T0(:,pp,:),[1 3 2])) ; 
+				DATA(:,txvars) = array2table(t0) ; 
 				result = rereg(DATA,{'ystar'},[txvars xvars],groupvar);
-				testStat = table2array(result(txvars, TestType))';
+				testStat = table2array(result(find(strcmp(txvars,theTx)), TestType));
 			else
 				error('Must specify a valid model')
 			end
