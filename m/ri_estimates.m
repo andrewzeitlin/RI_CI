@@ -1,4 +1,4 @@
-function [pvalue TEST0 y0 ] = ri_estimates(DATA,outcome,txvars,tau0,xvars, model, T0, P,varargin)
+function [pvalue TEST0 y0 ] = ri_estimates(DATA,outcome,txvars,tau0, model, T0, P,varargin)
 	%  Subfunction to conduct RI for a particular value
 	%  p-value for hypothesized sharp null.
 
@@ -9,12 +9,14 @@ function [pvalue TEST0 y0 ] = ri_estimates(DATA,outcome,txvars,tau0,xvars, model
 	addOptional(options,'TestSide','twosided');
 	addOptional(options,'TestValue',{});
 	addOptional(options,'TestType', {}); 
+	addOptional(options,'Controls',{});
 	parse(options,varargin{:}); 
 	groupvar = options.Results.GroupVar; 
 	theTx = options.Results.TheTx ;
 	TestSide = options.Results.TestSide; 
 	TestValue = options.Results.TestValue; 
-	TestType = options.Results.TestType; 
+	TestType = options.Results.TestType;
+	Controls = options.Results.Controls;  
 
 	%  Run DGP in reverse to get y0
 	y0 = table2array(DATA(:,outcome)) - table2array(DATA(:,txvars)) * tau0 ;
@@ -30,7 +32,7 @@ function [pvalue TEST0 y0 ] = ri_estimates(DATA,outcome,txvars,tau0,xvars, model
 	end
 
 	%  Now, loop over feasible randomizations, impose treatment effect, re-estimate, and extract test statistic
-	if strcmp(model,'lm'), x = table2array(DATA(:,xvars)); end % for speed.
+	if strcmp(model,'lm'), x = table2array(DATA(:,Controls)); end % for speed.
 	for pp = 1 : P
 
 		%  For KS stat, RI based on y0
@@ -55,7 +57,7 @@ function [pvalue TEST0 y0 ] = ri_estimates(DATA,outcome,txvars,tau0,xvars, model
 			elseif strcmp(model,'re') 
 				DATA.ystar = ystar ; % rereg() syntax requires this to be part of the table.
 				DATA(:,txvars) = array2table(t0) ; 
-				result = rereg(DATA,{'ystar'},[txvars xvars],groupvar);
+				result = rereg(DATA,{'ystar'},[txvars Controls],groupvar);
 				testStat = table2array(result(find(strcmp(txvars,theTx)), TestType));
 			else
 				error('Must specify a valid model')
