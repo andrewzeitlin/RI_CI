@@ -37,7 +37,7 @@ function varargout = ri_ci(DATA, outcome, txvars, T0, P, varargin) % model, stat
 	TestType = {params.Results.TestType}; 
 	TestSide = {params.Results.TestSide};
 	Controls = params.Results.Controls;
-	Support = params.Results.Support; 
+	Support = sort(params.Results.Support); 
 	TheTx = params.Results.TheTx ; 
 
 	TestZero = params.Results.TestZero; 
@@ -95,8 +95,10 @@ function varargout = ri_ci(DATA, outcome, txvars, T0, P, varargin) % model, stat
 				Controls_Temp = [Controls_Temp, Dx.Properties.VariableNames];
 			end
 		end
-		Controls = Controls_Temp;
+		Controls = Controls_Temp
 	end
+
+return 
 
 
 	%  Containers for results 
@@ -186,40 +188,50 @@ function varargout = ri_ci(DATA, outcome, txvars, T0, P, varargin) % model, stat
 	%  If requested, find confidence interval
 	if FindCI 
 
-		%  Find upper boundary of CI. -------------------------------------%
-		if mean(CIguess==0) == 1  % case where no search region has been specified
-			lb = beta ;
-			ub = beta + 10*1.96*se ; 
-		else 
-			lb = CIguess(3);
-			ub = CIguess(4); 
-		end
-		middle = (lb + ub) / 2 ; 
-
-		tau_prime = NaN(length(txvars),1);  %  initializing. This will always hold the current trial value.
-
-		%  Confirm that p-value at upper bound of search region is below significance threshold
+		%  Confirm that p-value at boundaries of search region are below significance threshold
 		if params.Results.CheckBoundaries 
+			if mean(CIguess==0) == 1  % case where no search region has been specified
+				lb = beta - 20*1.96*se ; % 
+				ub = beta + 20*1.96*se ; 
+			else 
+				lb = CIguess(1);
+				ub = CIguess(4); 
+			end
+
 			if length(txvars) > 1
 				if PlugIn 
 					tau_prime(find(~strcmp(txvars,TheTx))) = b_nuisance ; 
 				else 
 					tau_prime = tau0;
 				end
+				%  Make sure coefficient vector is a column vector (needed for matrix multiplication below)
+				if size(tau_prime,2) > size(tau_prime,1)
+					tau_prime = tau_prime'; 
+				end
 			end
-			tau_prime(find(strcmp(txvars,TheTx))) = ub; 
+			tau_prime_ub = tau_prime ;
+			tau_prime_ub(find(strcmp(txvars,TheTx))) = ub; 
+			tau_prime_lb = tau_prime ; 
+			tau_prime_lb(find(strcmp(txvars,TheTx))) = lb; 
 
 			if strcmp(model,'ks')
-				p = ri_estimates( ...
-					DATA,outcome,txvars,tau_prime ...  % TODO: Confirm vector-valued treatment extension hasn't broken simple case
-					, model ... % 'ks' ...
+				p_ub = ri_estimates( ...
+					DATA,outcome,txvars,ub ...  % TODO: Confirm vector-valued treatment extension hasn't broken simple case
+					, 'ks' ...
+					, T0, P ...
+					, 'Controls', Controls ... 
+					, 'TestSide','right' ...
+					) ; 
+				p_lb = ri_estimates( ...
+					DATA,outcome,txvars,lb ...
+					, 'ks' ...
 					, T0, P ...
 					, 'Controls', Controls ... 
 					, 'TestSide','right' ...
 					) ; 
 			else
-				[p] = ri_estimates( ...
-					DATA, outcome,txvars,tau_prime ...
+				p_ub = ri_estimates( ...
+					DATA, outcome,txvars,tau_prime_ub ...
 					, model ...
 					, T0, P  ...
 					, 'TheTx', TheTx ... 
@@ -229,14 +241,41 @@ function varargout = ri_ci(DATA, outcome, txvars, T0, P, varargin) % model, stat
 					, 'TestValue', TEST1 ...
 					, 'GroupVar',groupvar ...
 					); 
+				p_lb = ri_estimates( ...
+					DATA, outcome,txvars,tau_prime_lb ...
+					, model ...
+					, T0, P ...
+					, 'TheTx', TheTx ... 
+					, 'Controls', Controls ... 
+					, 'TestType', TestType ... 
+					, 'TestSide', 'twosided' ... % change back to 'left'
+					, 'TestValue',TEST1 ...
+					, 'GroupVar',groupvar ...
+					);
 			end
-			if p > SignificanceLevel/2
-				sprintf('You had a test value of %0.2f', TEST1)
-				ksdensity(TEST0)
-				sprintf('Initial attempt at upper bound %0.2f yielded p-value of %0.12f',ub,p)
+			if p_ub > SignificanceLevel/2
+				%sprintf('You had a test value of %0.2f', TEST1)
+				%ksdensity(TEST0)
+				sprintf('Initial attempt at upper bound %0.2f yielded p-value of %0.12f',ub,p_ub)
 				error('Initial value for upper bound of CI not high enough.')
 			end
+			if p_lb > SignificanceLevel/2 
+				sprintf('Initial attempt at lower bound %0.2f yielded p-value of %0.12f',lb,p_lb)
+				error('Initial value for lower bound of CI not low enough.')
+			end 				
 		end
+
+		%  CI.1.  Find upper boundary of CI. -------------------------------------%
+		if mean(CIguess==0) == 1  % case where no search region has been specified
+			lb = beta ;
+			ub = beta + 20*1.96*se ; 
+		else 
+			lb = CIguess(3);
+			ub = CIguess(4); 
+		end
+		middle = (lb + ub) / 2 ; 
+
+		tau_prime = NaN(length(txvars),1);  %  initializing. This will always hold the current trial value.
 
 		QUERIES_UB = NaN(MaxQueries,2); 
 		q = 1 ; 
@@ -298,44 +337,12 @@ function varargout = ri_ci(DATA, outcome, txvars, T0, P, varargin) % model, stat
 		%  Find lower boundary of CI. -------------------------------------%
 		if mean(CIguess==0) == 1  % case where no search region has been specified
 			ub = beta ;
-			lb = beta - 10*1.96*se ; 
+			lb = beta - 20*1.96*se ; 
 		else 
 			ub = CIguess(2);
 			lb = CIguess(1);
 		end
 		middle = (lb + ub) / 2 ; 
-
-		%  Confirm that p-value at lower bound of search region is below significance threshold
-		if params.Results.CheckBoundaries 
-			if strcmp(model,'ks')
-				p = ri_estimates( ...
-					DATA,outcome,txvars,lb ...
-					, 'ks' ...
-					, T0, P ...
-					, 'Controls', Controls ... 
-					, 'TestSide','right' ...
-					) ; 
-			else
-				if length(txvars) > 1
-					if PlugIn 
-						tau_prime(find(~strcmp(txvars,TheTx))) = b_nuisance ; 
-					else 
-						tau_prime = tau0;
-					end
-				end
-				tau_prime(find(strcmp(txvars,TheTx))) = lb; 
-				[p , ~ , ~ ] = ri_estimates(DATA, outcome,txvars,tau_prime, model,T0,P ...
-					, 'TheTx', TheTx ... 
-					, 'Controls', Controls ... 
-					, 'TestType', TestType ... 
-					, 'TestSide', 'twosided' ... % change back to 'left'
-					, 'TestValue',TEST1 ...
-					, 'GroupVar',groupvar);
-			end 
-			if p > SignificanceLevel/2
-				error('Initial value for lower bound of CI not low enough.')
-			end
-		end
 
 		QUERIES_LB = NaN(MaxQueries,2); 
 		q = 1 ; 

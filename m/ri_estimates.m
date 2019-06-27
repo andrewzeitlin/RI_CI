@@ -10,6 +10,7 @@ function [pvalue TEST0 y0 ] = ri_estimates(DATA,outcome,txvars,tau0, model, T0, 
 	addOptional(options,'TestValue',{});
 	addOptional(options,'TestType', {}); 
 	addOptional(options,'Controls',{});
+	addOptional(options,'Support',[-inf,inf]);
 	parse(options,varargin{:}); 
 	groupvar = options.Results.GroupVar; 
 	theTx = options.Results.TheTx ;
@@ -17,9 +18,10 @@ function [pvalue TEST0 y0 ] = ri_estimates(DATA,outcome,txvars,tau0, model, T0, 
 	TestValue = options.Results.TestValue; 
 	TestType = options.Results.TestType;
 	Controls = options.Results.Controls;  
+	Support = sort(options.Results.Support); 
 
 	%  Run DGP in reverse to get y0
-	y0 = table2array(DATA(:,outcome)) - table2array(DATA(:,txvars)) * tau0 ;
+	y0 = min(max(table2array(DATA(:,outcome)) - table2array(DATA(:,txvars)) * tau0, Support(1)),Support(2)) ;
 
 	%  If model is ks and TestValue has not been specified, estimate KS statistic on the hypothesized y0
 	if strcmp(model,'ks') && length(TestValue) == 0
@@ -47,7 +49,7 @@ function [pvalue TEST0 y0 ] = ri_estimates(DATA,outcome,txvars,tau0, model, T0, 
 		else 
 			%  Impose hypothesized DGP
 			t0 = permute(T0(:,pp,:),[1 3 2]);  % accommodates possibliity of multiple treatment variables
-			ystar = y0 + t0 * tau0 ;
+			ystar = min(Support(2),max(Support(1), y0 + t0 * tau0)) ;
 
 			%  Estimate model and collect test statistic
 			if strcmp(model,'lm')
