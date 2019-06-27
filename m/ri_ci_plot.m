@@ -1,5 +1,6 @@
-function fig = ri_ci_plot(y0,y1,beta,CI,varargin)
-	
+function ri_ci_plot(y0,y1,beta,CI,varargin)
+	%fig = 
+
 	%  Unpack
 	options = inputParser ;
 	addOptional(options,'Colors',{'b' 'r'});
@@ -23,13 +24,13 @@ function fig = ri_ci_plot(y0,y1,beta,CI,varargin)
 	ub = CI(2) - beta;
 
 	%  Construct figure 
-	if length(figure) == 0
-		fig = figure;
+	if Figure > 0 
+		figure(Figure);
 	else 
-		fig = figure(Figure);
+		figure; 
 	end
 
-	hold on 
+	% hold on 
 	[F0,x0] = ecdf(y0); 
 	[F1,x1] = ecdf(y1);
 	plot(x0,F0,'Color',Colors{1})
@@ -46,6 +47,6 @@ function fig = ri_ci_plot(y0,y1,beta,CI,varargin)
 		legend(LegendLabels,'Location',LegendLocation);
 	end
 
-	hold off
+	% hold off
 	
 end
