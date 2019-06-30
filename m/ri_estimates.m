@@ -21,7 +21,10 @@ function [pvalue TEST0 test1 y0 ] = ri_estimates(DATA,outcome,txvars,tau0, model
 	Support = sort(options.Results.Support); 
 
 	%  Run DGP in reverse to get y0
-	y0 = min(max(table2array(DATA(:,outcome)) - table2array(DATA(:,txvars)) * tau0, Support(1)),Support(2)) ;
+	%  TODO:  change how boundaries of parameter space are being applied here.
+	%y0 = min(max(table2array(DATA(:,outcome)) - table2array(DATA(:,txvars)) * tau0, Support(1)),Support(2)) ;	
+	y0 = table2array(DATA(:,outcome)) - table2array(DATA(:,txvars)) * tau0 ; 
+	y0(~isnan(y0)) = min(max(y0(~isnan(y0)), Support(1)),Support(2)) ;  % impose support on non-missing values of y0
 
 	%  If model is ks and TestValue has not been specified, estimate KS statistic on the hypothesized y0
 	if strcmp(model,'ks') && length(TestValue) == 0
@@ -34,7 +37,15 @@ function [pvalue TEST0 test1 y0 ] = ri_estimates(DATA,outcome,txvars,tau0, model
 	end
 
 	%  Now, loop over feasible randomizations, impose treatment effect, re-estimate, and extract test statistic
-	if strcmp(model,'lm'), x = table2array(DATA(:,Controls)); end % for speed.
+
+	% For speed, and potential parallelizability: don't swap treatments into data table, but run this as a matrix. 
+	%  Extract only once..
+	if strcmp(model,'lm')
+		x = [ ... %ones(size(DATA,1),1) , 
+			table2array(DATA(:,Controls)) ...
+			]; 
+	end 
+	
 	for pp = 1 : P
 
 		%  For KS stat, RI based on y0
@@ -49,7 +60,10 @@ function [pvalue TEST0 test1 y0 ] = ri_estimates(DATA,outcome,txvars,tau0, model
 		else 
 			%  Impose hypothesized DGP
 			t0 = permute(T0(:,pp,:),[1 3 2]);  % accommodates possibliity of multiple treatment variables
-			ystar = min(Support(2),max(Support(1), y0 + t0 * tau0)) ;
+
+			%  TODO:  Change how boundaries of parameters space are being applied here!
+			ystar = y0 + t0 * tau0 ; 
+			ystar(~isnan(ystar)) = min(Support(2),max(Support(1), ystar(~isnan(ystar))));
 
 			%  Estimate model and collect test statistic
 			if strcmp(model,'lm')
