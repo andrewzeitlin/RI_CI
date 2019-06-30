@@ -1,6 +1,6 @@
 function varargout = ri_ci(DATA, outcome, txvars, T0, P, varargin) % model, stat, varargin
 
-	%  Function to conduct RI, including (optionally) confidence intervaals and test of the no-effect null.
+	%  Function to conduct RI, including (optionally) confidence intervals and test of the no-effect null.
 
 	%  TODO (1): add functionality to allow additional estimation commands:
 	%	- clusterreg() 
@@ -95,11 +95,8 @@ function varargout = ri_ci(DATA, outcome, txvars, T0, P, varargin) % model, stat
 				Controls_Temp = [Controls_Temp, Dx.Properties.VariableNames];
 			end
 		end
-		Controls = Controls_Temp
+		Controls = Controls_Temp; 
 	end
-
-return 
-
 
 	%  Containers for results 
 	TEST0 = NaN(P,length(txvars)); % to hold null distribution for test statistic.
@@ -155,8 +152,8 @@ return
 		if FindCI 
 			%  use simple linear regression to initialize search region.
 			lm = fitlm(tx,ydd);
-			beta = table2array(lm.Coefficients(2,'Estimate')); 
-			se   = table2array(lm.Coefficients(2,'SE')); 
+			beta = table2array(lm.Coefficients(TheTx,'Estimate')); 
+			se   = table2array(lm.Coefficients(TheTx,'SE')); 
 		end
 	end
 
@@ -176,14 +173,6 @@ return
 			) ; 
 	end
 
-
-
-	if params.Results.ShowMainEstimates 
-		sprintf('__RESULTS OF ANALYTICAL MODEL:__')
-		lm 
-		sprintf('The p-value from Randomization Inference for the hypothesis that tau = %02.2f is %0.2f',tau0, pvalue)
-	end
-
 	%----------------------------------------------------------------------%
 	%  If requested, find confidence interval
 	if FindCI 
@@ -191,8 +180,8 @@ return
 		%  Confirm that p-value at boundaries of search region are below significance threshold
 		if params.Results.CheckBoundaries 
 			if mean(CIguess==0) == 1  % case where no search region has been specified
-				lb = beta - 20*1.96*se ; % 
-				ub = beta + 20*1.96*se ; 
+				lb = beta - 10*1.96*se ; % 
+				ub = beta + 10*1.96*se ; 
 			else 
 				lb = CIguess(1);
 				ub = CIguess(4); 
@@ -202,12 +191,14 @@ return
 				if PlugIn 
 					tau_prime(find(~strcmp(txvars,TheTx))) = b_nuisance ; 
 				else 
-					tau_prime = tau0;
+					tau_prime = tau0; % allow manually specifying values for nuisance parameters
 				end
 				%  Make sure coefficient vector is a column vector (needed for matrix multiplication below)
 				if size(tau_prime,2) > size(tau_prime,1)
 					tau_prime = tau_prime'; 
 				end
+			else 
+				tau_prime = NaN(1,1);
 			end
 			tau_prime_ub = tau_prime ;
 			tau_prime_ub(find(strcmp(txvars,TheTx))) = ub; 
@@ -301,7 +292,7 @@ return
 				end
 				tau_prime(find(strcmp(txvars,TheTx))) = middle; 
 
-				[p , ~ , ~ ] = ri_estimates( ...
+				p = ri_estimates( ...
 					DATA, outcome,txvars,tau_prime, model ...
 					,T0,P ... 
 					, 'TheTx', TheTx ... 
@@ -367,7 +358,7 @@ return
 				end
 				tau_prime(find(strcmp(txvars,TheTx))) = middle; 
 
-				[p , ~ , ~ ] = ri_estimates(DATA, outcome,txvars,tau_prime, model,T0,P ...
+				p = ri_estimates(DATA, outcome,txvars,tau_prime, model,T0,P ...
 					, 'TheTx', TheTx ... 
 					, 'Controls', Controls ... 
 					, 'TestType',TestType ...
