@@ -12,6 +12,7 @@ function [pvalue TEST0 test1 y0 ] = ri_estimates(DATA,outcome,txvars,tau0, model
 	addOptional(options,'Controls',{});
 	addOptional(options,'Support',[-inf,inf]);
 	addOptional(options,'ShowWaitBar',false) ; 
+	addOptional(options,'WaitMessage','RI in progress...'); 
 	parse(options,varargin{:}); 
 	groupvar = options.Results.GroupVar; 
 	TheTx = options.Results.TheTx ;
@@ -21,6 +22,7 @@ function [pvalue TEST0 test1 y0 ] = ri_estimates(DATA,outcome,txvars,tau0, model
 	Controls = options.Results.Controls;  
 	Support = sort(options.Results.Support); 
 	ShowWaitBar = options.Results.ShowWaitBar; 
+	WaitMessage = options.Results.WaitMessage; 
 
 	%  Run DGP in reverse to get y0
 	%  TODO:  change how boundaries of parameter space are being applied here.
@@ -48,7 +50,7 @@ function [pvalue TEST0 test1 y0 ] = ri_estimates(DATA,outcome,txvars,tau0, model
 			]; 
 	end 
 	
-	if ShowWaitBar, hh = waitbar(0,'RI in progress...'); end 
+	if ShowWaitBar, hh = waitbar(0, WaitMessage); end 
 	for pp = 1 : P
 
 		%  For KS stat, RI based on y0
