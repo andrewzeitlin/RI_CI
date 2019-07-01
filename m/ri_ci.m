@@ -20,6 +20,7 @@ function varargout = ri_ci(DATA, outcome, txvars, T0, P, varargin) % model, stat
 	addOptional(params,'TestZero',true); 			% to add a test of the zero null. Defaults on.
 	addOptional(params,'FindCI',false);  			%  Switch: locate confidence interval
 	addOptional(params,'CIguess',[0 0 0 0 ]);		% initial guess for confidence interval. Specified as a range around the lower bound (1st and second arguments) and a range around the upper bound (2nd and third arguments)
+	addOptional(params,'CiSearchSize', 20) ; 		% default SDs of search width on EITHER side of the parameter estimate to search for CI (if CIguess not specified). 
 	addOptional(params,'MaxQueries',10); 			% maximum number of trials to find each end of the confidence interval
 	addOptional(params,'MinStepSize',0); 			% minimum step size for stopping rule.
 	addOptional(params,'SignificanceLevel',0.05); 	% alpha for CI
@@ -51,6 +52,7 @@ function varargout = ri_ci(DATA, outcome, txvars, T0, P, varargin) % model, stat
 	groupvar = params.Results.GroupVar; 
 	tau0 = params.Results.tau0 ; 
 	Noisily = params.Results.Noisily; 
+	CiSearchSize = params.Results.CiSearchSize ; 
 
 	%  If treatment assignment is vector-valued, need to decide which variable will be basis for the test for CI purposes.
 	if length(TheTx) == 0 
@@ -180,8 +182,8 @@ function varargout = ri_ci(DATA, outcome, txvars, T0, P, varargin) % model, stat
 		%  Confirm that p-value at boundaries of search region are below significance threshold
 		if params.Results.CheckBoundaries 
 			if mean(CIguess==0) == 1  % case where no search region has been specified
-				lb = beta - 20*1.96*se ; % 
-				ub = beta + 20*1.96*se ; 
+				lb = beta - CiSearchSize*1.96*se ; % 
+				ub = beta + CiSearchSize*1.96*se ; 
 			else 
 				lb = CIguess(1);
 				ub = CIguess(4); 
@@ -259,7 +261,7 @@ function varargout = ri_ci(DATA, outcome, txvars, T0, P, varargin) % model, stat
 		%  CI.1.  Find upper boundary of CI. -------------------------------------%
 		if mean(CIguess==0) == 1  % case where no search region has been specified
 			lb = beta ;
-			ub = beta + 20*1.96*se ; 
+			ub = beta + CiSearchSize*1.96*se ; 
 		else 
 			lb = CIguess(3);
 			ub = CIguess(4); 
@@ -328,7 +330,7 @@ function varargout = ri_ci(DATA, outcome, txvars, T0, P, varargin) % model, stat
 		%  Find lower boundary of CI. -------------------------------------%
 		if mean(CIguess==0) == 1  % case where no search region has been specified
 			ub = beta ;
-			lb = beta - 20*1.96*se ; 
+			lb = beta - CiSearchSize*1.96*se ; 
 		else 
 			ub = CIguess(2);
 			lb = CIguess(1);
