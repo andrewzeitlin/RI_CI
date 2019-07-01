@@ -260,6 +260,19 @@ function varargout = ri_ci(DATA, outcome, txvars, T0, P, varargin) % model, stat
 			end 				
 		end
 
+		%  Set up diagnostic figure.  
+		if Noisily 
+			figure; clf ;
+			figno = get(gcf,'Number') ; % store figure numer 
+			axis([lb ub 0 0.25]);
+			hold on 
+			figwidth = ub - lb ;
+			rectangle('Position',[lb, 0, figwidth, 0.025],'EdgeColor','none','FaceColor',[0.75 0.75 0.75]);
+			line([beta beta] , [0 1],'LineStyle','--','Color','b') % vertical line at point estimate 
+			xlabel('Coefficient estimate')
+			ylabel('p-value') 
+		end 
+
 		%  CI.1.  Find upper boundary of CI. -------------------------------------%
 		if mean(CIguess==0) == 1  % case where no search region has been specified
 			lb = beta ;
@@ -308,6 +321,11 @@ function varargout = ri_ci(DATA, outcome, txvars, T0, P, varargin) % model, stat
 					); 
 			end
 			QUERIES_UB(q,2) = p;
+
+			if Noisily
+				% figure(figno)
+				h1=scatter(QUERIES_UB(:,1),QUERIES_UB(:,2),'MarkerEdgeColor','b');
+			end 
 
 			%  If reject, move left.  Otherwise, move right.
 			if q > 1, m0 = middle ; end % store previous tested value if appropriate
@@ -374,6 +392,11 @@ function varargout = ri_ci(DATA, outcome, txvars, T0, P, varargin) % model, stat
 					); 
 			end 
 			QUERIES_LB(q,2) = p;
+			if Noisily
+				% figure(figno) 
+				h2=scatter(QUERIES_LB(:,1),QUERIES_LB(:,2),'MarkerEdgeColor', 'b'); 
+			end 
+
 
 			%  If reject, move left.  Otherwise, move right.
 			if q > 1, m0 = middle ; end % store previous tested value if appropriate
@@ -395,6 +418,12 @@ function varargout = ri_ci(DATA, outcome, txvars, T0, P, varargin) % model, stat
 		end
 		QUERIES_LB = QUERIES_LB(~isnan(QUERIES_LB(:,1)),:);
 		CI_LB = min(QUERIES_LB( QUERIES_LB(:,2) > SignificanceLevel/2, 1)); 
+
+		%  Release the figure 
+		if Noisily
+			% figure(figno)
+			hold off ; 
+		end 
 
 		%  Return CI as a vector
 		CI = [CI_LB , CI_UB];
