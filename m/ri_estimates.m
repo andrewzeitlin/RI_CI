@@ -11,6 +11,7 @@ function [pvalue TEST0 test1 y0 ] = ri_estimates(DATA,outcome,txvars,tau0, model
 	addOptional(options,'TestType', {}); 
 	addOptional(options,'Controls',{});
 	addOptional(options,'Support',[-inf,inf]);
+	addOptional(options,'ShowWaitBar',false) ; 
 	parse(options,varargin{:}); 
 	groupvar = options.Results.GroupVar; 
 	TheTx = options.Results.TheTx ;
@@ -19,6 +20,7 @@ function [pvalue TEST0 test1 y0 ] = ri_estimates(DATA,outcome,txvars,tau0, model
 	TestType = options.Results.TestType;
 	Controls = options.Results.Controls;  
 	Support = sort(options.Results.Support); 
+	ShowWaitBar = options.Results.ShowWaitBar; 
 
 	%  Run DGP in reverse to get y0
 	%  TODO:  change how boundaries of parameter space are being applied here.
@@ -46,6 +48,7 @@ function [pvalue TEST0 test1 y0 ] = ri_estimates(DATA,outcome,txvars,tau0, model
 			]; 
 	end 
 	
+	if ShowWaitBar, hh = waitbar(0,'RI in progress...'); end 
 	for pp = 1 : P
 
 		%  For KS stat, RI based on y0
@@ -80,7 +83,9 @@ function [pvalue TEST0 test1 y0 ] = ri_estimates(DATA,outcome,txvars,tau0, model
 			end
 		end
 		TEST0(pp,:) = testStat;
+		if ShowWaitBar, waitbar(pp/P); end 
 	end
+	if ShowWaitBar, close(hh) ; end 
 
 	%  Calculate left and right tails as required 
 	if ~strcmp(TestSide(1), 'right') , p_left = mean(TEST0 < repmat(TestValue,P,1)) ; end
