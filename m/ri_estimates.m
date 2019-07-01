@@ -11,6 +11,7 @@ function [pvalue TEST0 test1 y0 ] = ri_estimates(DATA,outcome,txvars,tau0, model
 	addOptional(options,'TestType', {}); 
 	addOptional(options,'Controls',{});
 	addOptional(options,'Support',[-inf,inf]);
+	addOptional(options,'RunParallel',false); 
 	addOptional(options,'ShowWaitBar',false) ; 
 	addOptional(options,'WaitMessage','RI in progress...'); 
 	parse(options,varargin{:}); 
@@ -23,10 +24,9 @@ function [pvalue TEST0 test1 y0 ] = ri_estimates(DATA,outcome,txvars,tau0, model
 	Support = sort(options.Results.Support); 
 	ShowWaitBar = options.Results.ShowWaitBar; 
 	WaitMessage = options.Results.WaitMessage; 
+	RunParallel = options.Results.RunParallel; 
 
 	%  Run DGP in reverse to get y0
-	%  TODO:  change how boundaries of parameter space are being applied here.
-	%y0 = min(max(table2array(DATA(:,outcome)) - table2array(DATA(:,txvars)) * tau0, Support(1)),Support(2)) ;	
 	y0 = table2array(DATA(:,outcome)) - table2array(DATA(:,txvars)) * tau0 ; 
 	y0(~isnan(y0)) = min(max(y0(~isnan(y0)), Support(1)),Support(2)) ;  % impose support on non-missing values of y0
 
@@ -48,46 +48,34 @@ function [pvalue TEST0 test1 y0 ] = ri_estimates(DATA,outcome,txvars,tau0, model
 		x = [ ... %ones(size(DATA,1),1) , 
 			table2array(DATA(:,Controls)) ...
 			]; 
+	else 
+		x = []; % creating empty matrix in this case just so it can be passed to the getTestStat function without worrying about model-specific cases.
 	end 
 	
-	if ShowWaitBar, hh = waitbar(0, WaitMessage); end 
-	for pp = 1 : P
-
-		%  For KS stat, RI based on y0
-		if strcmp(model, 'ks')
-			if length(txvars) > 1 
-				tx = T0(:,pp,find(strcmp(txvars,TheTx)))
-				%  TODO:  For the KS test, when multiple treatment variables, need to residualize outcome to remove this as a potential source of bias here.
-			else 
-				tx = (T0(:,pp)); 
-			end
-			[~,~,testStat ] = kstest2(y0(tx==1),y0(tx==0)) ; % two-sample KS stat
-		else 
-			%  Impose hypothesized DGP
-			t0 = permute(T0(:,pp,:),[1 3 2]);  % accommodates possibliity of multiple treatment variables
-
-			%  TODO:  Change how boundaries of parameters space are being applied here!
-			ystar = y0 + t0 * tau0 ; 
-			ystar(~isnan(ystar)) = min(Support(2),max(Support(1), ystar(~isnan(ystar))));
-
-			%  Estimate model and collect test statistic
-			if strcmp(model,'lm')
-				lm = fitlm([t0 , x ], ystar) ; % 
-				testStat = table2array(lm.Coefficients(1+find(strcmp(txvars,TheTx)), [TestType]));
-
-			elseif strcmp(model,'re') 
-				DATA.ystar = ystar ; % rereg() syntax requires this to be part of the table.
-				DATA(:,txvars) = array2table(t0) ; 
-				result = rereg(DATA,{'ystar'},[txvars Controls],groupvar);
-				testStat = table2array(result(find(strcmp(txvars,TheTx)), TestType));
+	if RunParallel
+		parfor pp = 1 : P 
+			if strcmp(model, 'rereg')
+				testStat = getTestStat(y0,tau0,txvars,TheTx,model,TestType,T0,pp,'Controls',Controls,'Support',Support,'x',x,'DATA',DATA); 
 			else
-				error('Must specify a valid model')
+				testStat = getTestStat(y0,tau0,txvars,TheTx,model,TestType,T0,pp,'Controls',Controls,'Support',Support,'x',x);  
 			end
+			TEST0(pp,:) = testStat;
 		end
-		TEST0(pp,:) = testStat;
-		if ShowWaitBar, waitbar(pp/P); end 
+	else 
+		if ShowWaitBar, hh = waitbar(0, WaitMessage); end
+		for pp = 1 : P
+			% Using model-specific calls for rereg to avoid creating extra copies of the dataset otherwise 
+			if strcmp(model, 'rereg')
+				testStat = getTestStat(y0,tau0,txvars,TheTx,model,TestType,T0,pp,'Controls',Controls,'Support',Support,'x',x,'DATA',DATA); 
+			else
+				testStat = getTestStat(y0,tau0,txvars,TheTx,model,TestType,T0,pp,'Controls',Controls,'Support',Support,'x',x);  
+			end
+			TEST0(pp,:) = testStat;
+			if ShowWaitBar, waitbar(pp/P); end 
+		end
+		if ShowWaitBar, close(hh) ; end 
 	end
-	if ShowWaitBar, close(hh) ; end 
+
 
 	%  Calculate left and right tails as required 
 	if ~strcmp(TestSide(1), 'right') , p_left = mean(TEST0 < repmat(TestValue,P,1)) ; end
@@ -101,3 +89,49 @@ function [pvalue TEST0 test1 y0 ] = ri_estimates(DATA,outcome,txvars,tau0, model
 
 end
 
+
+function testStat = getTestStat(y0,tau0,txvars,TheTx,model,TestType,T0,pp,varargin)
+	%  Parse input 
+	parameters = inputParser ; 
+	addOptional(parameters,'x',[]); 
+	addOptional(parameters,'Controls',{});
+	addOptional(parameters,'Support',[-inf,inf]);
+	addOptional(parameters,'DATA',{});
+	addOptional(parameters,'groupvar',{});
+	parse(parameters,varargin{:}); 
+	x = parameters.Results.x;
+	Controls = parameters.Results.Controls;
+	Support = parameters.Results.Support; 
+	DATA = parameters.Results.DATA;
+	groupvar = parameters.Results.groupvar; 	
+
+	%  For KS stat, RI based on y0
+	if strcmp(model, 'ks')
+		if length(txvars) > 1 
+			tx = T0(:,pp,find(strcmp(txvars,TheTx)))
+			%  TODO:  For the KS test, when multiple treatment variables, need to residualize outcome to remove this as a potential source of bias here.
+		else 
+			tx = (T0(:,pp)); 
+		end
+		[~,~,testStat ] = kstest2(y0(tx==1),y0(tx==0)) ; % two-sample KS stat
+	else 
+		%  Impose hypothesized DGP
+		t0 = permute(T0(:,pp,:),[1 3 2]);  % accommodates possibliity of multiple treatment variables
+
+		ystar = y0 + t0 * tau0 ; 
+		ystar(~isnan(ystar)) = min(Support(2),max(Support(1), ystar(~isnan(ystar))));
+
+		%  Estimate model and collect test statistic
+		if strcmp(model,'lm')
+			lm = fitlm([t0 , x ], ystar) ; % 
+			testStat = table2array(lm.Coefficients(1+find(strcmp(txvars,TheTx)), [TestType]));
+		elseif strcmp(model,'re') 
+			DATA.ystar = ystar ; % rereg() syntax requires this to be part of the table.
+			DATA(:,txvars) = array2table(t0) ; 
+			result = rereg(DATA,{'ystar'},[txvars Controls],groupvar);
+			testStat = table2array(result(find(strcmp(txvars,TheTx)), TestType));
+		else
+			error('Must specify a valid model')
+		end
+	end
+end
