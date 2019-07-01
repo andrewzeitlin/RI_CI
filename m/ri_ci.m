@@ -180,8 +180,8 @@ function varargout = ri_ci(DATA, outcome, txvars, T0, P, varargin) % model, stat
 		%  Confirm that p-value at boundaries of search region are below significance threshold
 		if params.Results.CheckBoundaries 
 			if mean(CIguess==0) == 1  % case where no search region has been specified
-				lb = beta - 10*1.96*se ; % 
-				ub = beta + 10*1.96*se ; 
+				lb = beta - 20*1.96*se ; % 
+				ub = beta + 20*1.96*se ; 
 			else 
 				lb = CIguess(1);
 				ub = CIguess(4); 
