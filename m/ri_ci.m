@@ -327,6 +327,8 @@ function varargout = ri_ci(DATA, outcome, txvars, T0, P, varargin) % model, stat
 			%  Update counter
 			q = q+1;
 		end
+		%  Remove unused entries from queries table
+		QUERIES_UB = QUERIES_UB(~isnan(QUERIES_UB(:,1)),:);
 		CI_UB = max(QUERIES_UB(QUERIES_UB(:,2) > SignificanceLevel/2, 1)) ; 
 
 		%  Find lower boundary of CI. -------------------------------------%
@@ -391,6 +393,7 @@ function varargout = ri_ci(DATA, outcome, txvars, T0, P, varargin) % model, stat
 			end 
 			q = q+1;
 		end
+		QUERIES_LB = QUERIES_LB(~isnan(QUERIES_LB(:,1)),:);
 		CI_LB = min(QUERIES_LB( QUERIES_LB(:,2) > SignificanceLevel/2, 1)); 
 
 		%  Return CI as a vector
