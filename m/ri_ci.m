@@ -193,18 +193,13 @@ function varargout = ri_ci(DATA, outcome, txvars, T0, P, varargin) % model, stat
 				ub = CIguess(4); 
 			end
 
+			tau_prime = NaN(length(txvars),1); 
 			if length(txvars) > 1
 				if PlugIn 
 					tau_prime(find(~strcmp(txvars,TheTx))) = b_nuisance ; 
 				else 
 					tau_prime = tau0; % allow manually specifying values for nuisance parameters
 				end
-				%  Make sure coefficient vector is a column vector (needed for matrix multiplication below)
-				if size(tau_prime,2) > size(tau_prime,1)
-					tau_prime = tau_prime'; 
-				end
-			else 
-				tau_prime = NaN(1,1);
 			end
 			tau_prime_ub = tau_prime ;
 			tau_prime_ub(find(strcmp(txvars,TheTx))) = ub; 
