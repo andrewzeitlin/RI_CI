@@ -1,4 +1,4 @@
-function results = rereg(DATA,yvar,xvars,groupvar)
+function [results,N] = rereg(DATA,yvar,xvars,groupvar)
 	%  Function to estimate random-effects model.
 	%  Assumes random-effect groups are reported in an (N x 1) vector of group indices.
 	%
@@ -15,6 +15,16 @@ function results = rereg(DATA,yvar,xvars,groupvar)
     %  Tolerance for claim that there is no within-group variation in some
     %  characteristic 
     tol = 1e-9; % ToDo:  Allow specifying this as an option.
+
+    %  Check for missing values, and subset the non-missing data that will be used for estimation
+    if sum(max(ismissing(DATA(:,[yvar xvars groupvar])),[],2)) > 0 
+        DATA = DATA(...
+                min(...
+                    ~ismissing(DATA(:,[yvar xvars groupvar])) ...
+                    ,[],2 ...
+                )...
+            ,:) ;
+    end
 
     %  Extract data as matrices from table DATA.
     y = table2array(DATA(:,yvar)) ;
