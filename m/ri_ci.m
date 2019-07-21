@@ -1,4 +1,4 @@
-function varargout = ri_ci(DATA, outcome, txvars, T0, P, varargin) % model, stat, varargin
+function [beta, varargout] = ri_ci(DATA, outcome, txvars, T0, P, varargin) % model, stat, varargin
 
 	%  Function to conduct RI, including (optionally) confidence intervals and test of the no-effect null.
 
@@ -15,6 +15,8 @@ function varargout = ri_ci(DATA, outcome, txvars, T0, P, varargin) % model, stat
 	
 	%  Parse inputs
 	params = inputParser ; 
+	addOptional(params,'T0',{}); %  Array of potential treatments
+	addOptional(params,'P',{}); %  Number of permutations of potential treatments to consider.
 	addOptional(params,'Controls',{}); % observational RHS variables
 	addOptional(params,'Model','lm');  			% model type
 	addOptional(params,'TestType','tStat');		%  name of test statistic
@@ -35,7 +37,11 @@ function varargout = ri_ci(DATA, outcome, txvars, T0, P, varargin) % model, stat
 	addOptional(params,'RunParallel',false) ;  % RI with parfor loops in ri_estimates.
 	addOptional(params,'Support',[-inf, inf]); % boundary values for potential outcomes.
 	addOptional(params,'Noisily',false); 
+	
 	parse(params,varargin{:}); 
+
+	T0 = params.Results.T0; 
+	P = params.Results.P; 
 
 	model = {params.Results.Model}; 
 	TestType = {params.Results.TestType}; 
@@ -117,12 +123,10 @@ function varargout = ri_ci(DATA, outcome, txvars, T0, P, varargin) % model, stat
 			beta = table2array(lm.Coefficients(TheTx,'Estimate')); 
 			se   = table2array(lm.Coefficients(TheTx,'SE')); 
 		end
-
 		%  Coefficients on nuisance treatments for default behavior of p-values and CIs
 		if length(txvars) > 1 
 			b_nuisance = table2array(lm.Coefficients(nuisanceTx,'Estimate')); 
 		end
-
 	elseif strcmp(model,'re') 
 		sprintf('Now estimating RE model')
 		result = rereg(DATA,outcome,[txvars Controls] ,groupvar )
@@ -155,12 +159,11 @@ function varargout = ri_ci(DATA, outcome, txvars, T0, P, varargin) % model, stat
 			Controls = {}; %  These have already been used to residualize.
 		end
 
-		if FindCI 
-			%  use simple linear regression to initialize search region.
-			lm = fitlm(tx,ydd);
-			beta = table2array(lm.Coefficients(TheTx,'Estimate')); 
-			se   = table2array(lm.Coefficients(TheTx,'SE')); 
-		end
+		%  use simple linear regression to initialize search region,
+		%  and to return point estimate as <beta>
+		lm = fitlm(tx,ydd);
+		beta = table2array(lm.Coefficients(TheTx,'Estimate')); 
+		se   = table2array(lm.Coefficients(TheTx,'SE')); 
 	end
 
 	%  Conduct RI on the model, using the point estimmate as a point of comparison. Two-sided test, null hypothesis as specified by user (parameter tau0). 
@@ -431,7 +434,6 @@ function varargout = ri_ci(DATA, outcome, txvars, T0, P, varargin) % model, stat
 		%  Return CI as a vector
 		CI = [CI_LB , CI_UB];
 	end
-
 
 	% Write function outputs
 	if TestZero , varargout{1} = pvalue ; end
