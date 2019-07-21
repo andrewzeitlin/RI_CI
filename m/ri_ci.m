@@ -141,8 +141,7 @@ function [beta, varargout] = ri_ci(DATA, outcome, txvars, varargin) % model, sta
 			lm
 		end 
 	elseif strcmp(model,'re') 
-		sprintf('Now estimating RE model')
-		re_model = rereg(DATA,outcome,[txvars Controls] ,groupvar )
+		re_model = rereg(DATA,outcome,[txvars Controls] ,groupvar ) ; 
 		TEST1 = table2array(re_model([TheTx],[TestType]));
 		beta = table2array(re_model(TheTx,{'Estimate'}));
 		if FindCI 
