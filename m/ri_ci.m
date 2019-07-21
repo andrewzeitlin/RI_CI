@@ -1,4 +1,4 @@
-function [beta, varargout] = ri_ci(DATA, outcome, txvars, T0, P, varargin) % model, stat, varargin
+function [beta, varargout] = ri_ci(DATA, outcome, txvars, varargin) % model, stat, varargin
 
 	%  Function to conduct RI, including (optionally) confidence intervals and test of the no-effect null.
 
@@ -90,7 +90,6 @@ function [beta, varargout] = ri_ci(DATA, outcome, txvars, T0, P, varargin) % mod
 	%  If control set not empty, check for categorical variables, and expand to a set of dummies. 
 	%  Then replace variable names in Controls
 	if length(Controls) > 0 
-		sprintf('Checking controls for categorical variables')
 		Controls_Temp = Controls ; % making changes in a temporary list, so that substitutions don't change looping over control variiables.
 		for k = 1:length(Controls)
 			xvar = Controls(k);
@@ -110,29 +109,29 @@ function [beta, varargout] = ri_ci(DATA, outcome, txvars, T0, P, varargin) % mod
 		Controls = Controls_Temp; 
 	end
 
-	%  Containers for results 
-	TEST0 = NaN(P,length(txvars)); % to hold null distribution for test statistic.
-
-	%  Estimate the model using the actual assignment. Obtain test statistic.  
+	%  Estimate the model using the actual assignment.  Save point estimate as beta; obtain test statistic.  
 	if strcmp(model,'lm')
-		lm = fitlm(DATA(:,[txvars Controls outcome])) 
+		lm = fitlm(DATA(:,[txvars Controls outcome])) ;
 		TEST1 = table2array(lm.Coefficients([TheTx],[TestType]))'; 
 
+		beta = table2array(lm.Coefficients(TheTx,'Estimate')); 
 		%  Inputs into starting values for search for 95% CI
 		if FindCI 
-			beta = table2array(lm.Coefficients(TheTx,'Estimate')); 
 			se   = table2array(lm.Coefficients(TheTx,'SE')); 
 		end
 		%  Coefficients on nuisance treatments for default behavior of p-values and CIs
 		if length(txvars) > 1 
 			b_nuisance = table2array(lm.Coefficients(nuisanceTx,'Estimate')); 
 		end
+		if Noisily  % under Noisily mode, replay the model 
+			lm
+		end 
 	elseif strcmp(model,'re') 
 		sprintf('Now estimating RE model')
 		result = rereg(DATA,outcome,[txvars Controls] ,groupvar )
 		TEST1 = table2array(result([txvars],[TestType]));
+		beta = table2array(result(TheTx,{'beta'}));
 		if FindCI 
-			beta = table2array(result(TheTx,{'beta'}));
 			se = table2array(result(TheTx,{'SE'}));
 		end
 		if length(txvars) > 1 
