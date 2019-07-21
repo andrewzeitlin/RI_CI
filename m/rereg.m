@@ -1,10 +1,8 @@
 function results = rereg(DATA,yvar,xvars,groupvar)
 	%  Function to estimate random-effects model.
-	%  Delivers coefficients only.
 	%  Assumes random-effect groups are reported in an (N x 1) vector of group indices.
 	%
 	%  Andrew Zeitlin
-	%  This verison:  2018.03.20
 	%  
 	%  Notation:  model below assumed to be of the form y_{ig} = x_{ig} + u_g + e_{ig}
 	%  And we will define v_{ig} = u_g + e_{ig} 
