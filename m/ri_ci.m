@@ -30,7 +30,7 @@ function [beta, varargout] = ri_ci(DATA, outcome, txvars, varargin) % model, sta
 	addOptional(params,'SignificanceLevel',0.05); 	% alpha for CI
 	addOptional(params,'ShowMainEstimates',false); 	% to replay results of primary estimate.
 	addOptional(params,'CheckBoundaries',true); 	% check boundaries for CI esitmation.
-	addOptional(params,'GroupVar',{''}); 			% group variable for random effects or clustered estimates
+	addOptional(params,'GroupVar',{}); 			% group variable for random effects or clustered estimates
 	addOptional(params,'TheTx',{}); 				% for vector-valued treatments, this cell array contains the name of the treatment of interest.
 	addOptional(params,'tau0',[] ) ; 				%  null to test if reporting a p-value. 
 	addOptional(params,'PlugIn',true); 		%  use plug-in estimate of nuisance variables for test of zero null and construction of CIs. Overrides specified tau0 for nuisance treatments
@@ -72,6 +72,10 @@ function [beta, varargout] = ri_ci(DATA, outcome, txvars, varargin) % model, sta
 	if size(tau0,1) > size(tau0,2) 
 		error('null treatment vector tau0 should be (1 x K) not (K x 1)');
 	end
+	%  Require groupvar to be specified for re model
+	if strcmp(model,'re') && isempty(groupvar)
+		error('Random effects model requires option GroupVar to be specified.')
+	end
 	%  Require parameter TestSide set to right for KS test
 	if strcmp(model,'ks') && ~strcmp(TestSide,'right')
 		error('For the KS test, must specify a right-tailed p-value')
@@ -86,6 +90,16 @@ function [beta, varargout] = ri_ci(DATA, outcome, txvars, varargin) % model, sta
 	else
 		nuisanceTx = {}; 
 	end
+
+	%  CHECK FOR MISSINGS IN ANALYTIC VARIABLES. 
+	% IF ANY, REMOVE FROM DATA AND POTENTIAL ASSIGNMENTS (as appropriate) 
+    if sum(max(ismissing(DATA(:,[outcome txvars Controls groupvar])),[],2)) > 0 
+        tokeep = min( ~ismissing(DATA(:,[outcome txvars Controls groupvar])), [], 2);
+        DATA = DATA(tokeep,:) ; 
+        if TestZero || FindCI % either of these requires the set of potential assignments
+        	T0 = T0(tokeep,:,:) ;
+        end
+    end
 	
 	%  If control set not empty, check for categorical variables, and expand to a set of dummies. 
 	%  Then replace variable names in Controls
@@ -128,15 +142,18 @@ function [beta, varargout] = ri_ci(DATA, outcome, txvars, varargin) % model, sta
 		end 
 	elseif strcmp(model,'re') 
 		sprintf('Now estimating RE model')
-		result = rereg(DATA,outcome,[txvars Controls] ,groupvar )
-		TEST1 = table2array(result([txvars],[TestType]));
-		beta = table2array(result(TheTx,{'beta'}));
+		re_model = rereg(DATA,outcome,[txvars Controls] ,groupvar )
+		TEST1 = table2array(re_model([TheTx],[TestType]));
+		beta = table2array(re_model(TheTx,{'Estimate'}));
 		if FindCI 
-			se = table2array(result(TheTx,{'SE'}));
+			se = table2array(re_model(TheTx,{'SE'}));
 		end
 		if length(txvars) > 1 
-			b_nuisance = table2array(lm.Coefficients(nuisanceTx,'Estimate'))
+			b_nuisance = table2array(re_model(nuisanceTx,'Estimate'))
 		end
+		if Noisily 
+			re_model 
+		end 
 	elseif strcmp(model,'ks')
 		% TODO:  Allow residualization of outcome at this stage, then used residualized outcome for all subsequent analysis.
 		if length(Controls)> 0 | length(txvars) > 1

@@ -32,18 +32,19 @@ function [pvalue TEST0 test1 y0 ] = ri_estimates(DATA,outcome,txvars,tau0, model
 	y0(~isnan(y0)) = min(max(y0(~isnan(y0)), Support(1)),Support(2)) ;  % impose support on non-missing values of y0
 
 	% For speed, and potential parallelizability: don't swap treatments into data table, but run this as a matrix. 
-	if strcmp(model,'lm')
-		x = [ ... %ones(size(DATA,1),1) , 
-			table2array(DATA(:,Controls)) ...
-			]; 
+	if strcmp(model,'lm') || strcmp(model,'re')
+		x = table2array(DATA(:,Controls)); 
+		if strcmp(model,'re')
+			g = table2array(DATA(:,groupvar));
+		end
 	else 
 		x = []; % creating empty matrix in this case just so it can be passed to the getTestStat function without worrying about model-specific cases.
 	end 
 
 	%  Estimate test statistic on the hypothesized y0 using the *actual* assignment
 	if length(TestValue) == 0
-		if strcmp(model, 'rereg')
-			TestValue = getTestStat(y0,txvars,TheTx,t1,model,TestType,'Controls',Controls,'Support',Support,'x',x,'DATA',DATA); 
+		if strcmp(model, 're') % separating this because it requires an extra argument (the group variable) to be passed as an array.
+			TestValue = getTestStat(y0,txvars,TheTx,t1,model,TestType,'Controls',Controls,'Support',Support,'x',x,'g',g); 
 		else
 			TestValue = getTestStat(y0,txvars,TheTx,t1,model,TestType,'Controls',Controls,'Support',Support,'x',x);  
 		end
@@ -55,8 +56,8 @@ function [pvalue TEST0 test1 y0 ] = ri_estimates(DATA,outcome,txvars,tau0, model
 			%  Draw treatment 
 			t0 = permute(T0(:,pp,:),[1 3 2]);  % accommodates possibliity of multiple treatment variables
 
-			if strcmp(model, 'rereg')
-				testStat = getTestStat(y0,txvars,TheTx,t0,model,TestType,'Controls',Controls,'Support',Support,'x',x,'DATA',DATA); 
+			if strcmp(model, 're')
+				testStat = getTestStat(y0,txvars,TheTx,t0,model,TestType,'Controls',Controls,'Support',Support,'x',x,'g',g); 
 			else
 				testStat = getTestStat(y0,txvars,TheTx,t0,model,TestType,'Controls',Controls,'Support',Support,'x',x);  
 			end
@@ -69,8 +70,8 @@ function [pvalue TEST0 test1 y0 ] = ri_estimates(DATA,outcome,txvars,tau0, model
 			t0 = permute(T0(:,pp,:),[1 3 2]);  % accommodates possibliity of multiple treatment variables
 
 			% Using model-specific calls for rereg to avoid creating extra copies of the dataset otherwise 
-			if strcmp(model, 'rereg')
-				testStat = getTestStat(y0,txvars,TheTx,t0,model,TestType,'Controls',Controls,'Support',Support,'x',x,'DATA',DATA); 
+			if strcmp(model, 're')
+				testStat = getTestStat(y0,txvars,TheTx,t0,model,TestType,'Controls',Controls,'Support',Support,'x',x,'g',g); 
 			else
 				testStat = getTestStat(y0,txvars,TheTx,t0,model,TestType,'Controls',Controls,'Support',Support,'x',x);  
 			end
@@ -100,14 +101,12 @@ function testStat = getTestStat(y0,txvars,TheTx,t0,model,TestType,varargin)
 	addOptional(parameters,'x',[]); 
 	addOptional(parameters,'Controls',{});
 	addOptional(parameters,'Support',[-inf,inf]);
-	addOptional(parameters,'DATA',{});
-	addOptional(parameters,'groupvar',{});
+	addOptional(parameters,'g',[]);
 	parse(parameters,varargin{:}); 
 	x = parameters.Results.x;
 	Controls = parameters.Results.Controls;
 	Support = parameters.Results.Support; 
-	DATA = parameters.Results.DATA;
-	groupvar = parameters.Results.groupvar; 	
+	g = parameters.Results.groupvar; 	
 
 	if strcmp(model, 'ks')
 		if length(txvars) > 1 
@@ -121,10 +120,8 @@ function testStat = getTestStat(y0,txvars,TheTx,t0,model,TestType,varargin)
 		lm = fitlm([t0 , x ], y0) ; % 
 		testStat = table2array(lm.Coefficients(1+find(strcmp(txvars,TheTx)), [TestType]));
 	elseif strcmp(model,'re') 
-		DATA.y0 = y0 ; % rereg() syntax requires this to be part of the table.
-		DATA(:,txvars) = array2table(t0) ; 
-		result = rereg(DATA,{'y0'},[txvars Controls],groupvar);
-		testStat = table2array(result(find(strcmp(txvars,TheTx)), TestType));
+		result = rereg_array(y0,[t0, x],g,[txvars Controls])
+		testStat = table2array(result(TheTx, TestType));
 	else
 		error('Must specify a valid model')
 	end
