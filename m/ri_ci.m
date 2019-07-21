@@ -2,9 +2,11 @@ function varargout = ri_ci(DATA, outcome, txvars, T0, P, varargin) % model, stat
 
 	%  Function to conduct RI, including (optionally) confidence intervals and test of the no-effect null.
 
+	%  TODO (0): add point estimates to set of outputs, as default.
 	%  TODO (1): add functionality to allow additional estimation commands:
-	%	- clusterreg() 
+	% 	- rereg()
 	%   - fitlme()
+	%	- clusterreg() 
 	%
 	%  TODO (2):  add plug-in principle functionality to KS test --  DGP
 
@@ -126,8 +128,8 @@ function varargout = ri_ci(DATA, outcome, txvars, T0, P, varargin) % model, stat
 		result = rereg(DATA,outcome,[txvars Controls] ,groupvar )
 		TEST1 = table2array(result([txvars],[TestType]));
 		if FindCI 
-			beta = table2array(result(txvars,{'beta'}));
-			se = table2array(result(txvars,{'SE'}));
+			beta = table2array(result(TheTx,{'beta'}));
+			se = table2array(result(TheTx,{'SE'}));
 		end
 		if length(txvars) > 1 
 			b_nuisance = table2array(lm.Coefficients(nuisanceTx,'Estimate'))
