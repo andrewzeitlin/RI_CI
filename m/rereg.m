@@ -22,6 +22,25 @@ function [results,N] = rereg(DATA,yvar,xvars,groupvar)
             ,:) ;
     end
 
+    %  Check for categorical variables in xvars, and expand/convert to indicators
+    xvars_temp = xvars ; 
+    for k = 1:length(xvars)
+        xvar = xvars(k);
+        if iscategorical(DATA{:,xvar}) 
+            Dx = array2table(dummyvar(DATA{:,xvar})); % dummy variables 
+            for ll = 1:size(Dx,2)
+                Dx.Properties.VariableNames(ll) = strcat(xvar, '_', num2str(ll));
+            end
+            Dx = Dx(:,2:end);  %  Leave one category out.
+            DATA = [DATA,Dx];  %  Append these indicators to the table.
+
+            %  Now remove xvar from Controls and add VariableNames from table Dx instead.
+            xvars_temp = xvars_temp(~strcmp(xvars_temp,xvar));
+            xvars_temp = [xvars_temp, Dx.Properties.VariableNames];
+        end
+    end
+    xvars = xvars_temp ; 
+
     %  Extract data as matrices from table DATA.
     y = table2array(DATA(:,yvar)) ;
     x = table2array(DATA(:,xvars));
