@@ -148,7 +148,7 @@ function [beta, varargout] = ri_ci(DATA, outcome, txvars, varargin) % model, sta
 			se = table2array(re_model(TheTx,{'SE'}));
 		end
 		if length(txvars) > 1 
-			b_nuisance = table2array(re_model(nuisanceTx,'Estimate'))
+			b_nuisance = table2array(re_model(nuisanceTx,'Estimate')) ; 
 		end
 		if Noisily 
 			re_model 

@@ -106,7 +106,7 @@ function testStat = getTestStat(y0,txvars,TheTx,t0,model,TestType,varargin)
 	x = parameters.Results.x;
 	Controls = parameters.Results.Controls;
 	Support = parameters.Results.Support; 
-	g = parameters.Results.groupvar; 	
+	g = parameters.Results.g; 	
 
 	if strcmp(model, 'ks')
 		if length(txvars) > 1 
@@ -120,7 +120,7 @@ function testStat = getTestStat(y0,txvars,TheTx,t0,model,TestType,varargin)
 		lm = fitlm([t0 , x ], y0) ; % 
 		testStat = table2array(lm.Coefficients(1+find(strcmp(txvars,TheTx)), [TestType]));
 	elseif strcmp(model,'re') 
-		result = rereg_array(y0,[t0, x],g,[txvars Controls])
+		result = rereg_array(y0,[t0, x],g,[txvars Controls]) ; 
 		testStat = table2array(result(TheTx, TestType));
 	else
 		error('Must specify a valid model')
