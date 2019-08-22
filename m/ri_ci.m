@@ -140,6 +140,8 @@ function [beta, varargout] = ri_ci(DATA, outcome, txvars, varargin) % model, sta
 		if Noisily  % under Noisily mode, replay the model 
 			lm
 		end 
+	elseif strcmp(model,'lme') 
+
 	elseif strcmp(model,'re') 
 		re_model = rereg(DATA,outcome,[txvars Controls] ,groupvar ) ; 
 		TEST1 = table2array(re_model([TheTx],[TestType]));
