@@ -73,7 +73,7 @@ function [beta, varargout] = ri_ci(DATA, outcome, txvars, varargin) % model, sta
 		error('null treatment vector tau0 should be (1 x K) not (K x 1)');
 	end
 	%  Require groupvar to be specified for re model
-	if strcmp(model,'re') && isempty(groupvar)
+	if (strcmp(model,'re') || strcmp(model,'lme')) && isempty(groupvar)
 		error('Random effects model requires option GroupVar to be specified.')
 	end
 	%  Require parameter TestSide set to right for KS test
@@ -140,7 +140,49 @@ function [beta, varargout] = ri_ci(DATA, outcome, txvars, varargin) % model, sta
 		if Noisily  % under Noisily mode, replay the model 
 			lm
 		end 
-	elseif strcmp(model,'lme') 
+
+	elseif strcmp(model,'lme')
+		%  Translate estimmation parameters into formula for lme 
+		rhs = [txvars Controls ] ; 
+		formula = [ outcome{1} ' ~ 1 ' ] ; 
+		for k = 1:length(rhs) 
+			formula = [ formula ' + ' rhs{k}] ; 
+		end	
+		for k = 1:length(groupvar)
+			formula = [ formula ' + (1 | ' groupvar{k} ' ) '] ; 
+		end
+
+		%  Estimate LME model
+		lme = fitlme(DATA,formula)
+
+		%  Extract coefficients 
+		%  Extracting parameter estimates and t statistics 
+		[~,~,estimates] = fixedEffects(lme); 
+		estimates = dataset2table(estimates);
+		%  Remove the '_1' that fitlme() adds to indicator variable names, so that they match the supplied parameters exactly, if those parameters match the data.
+		indicators = find(contains(estimates.Name,'_1')) ; 
+		for ii = indicators 
+			estimates.Name(ii) = strrep(estimates.Name(ii),'_1','');
+		end
+		estimates.Properties.RowNames = estimates.Name; % add row names to make lookups faster & more transparent
+
+		beta = table2array(estimates(TheTx,'Estimate')); 
+
+		%  Inputs into starting values for search for 95% CI
+		if FindCI 
+			se   = table2array(estimates(TheTx,'SE')); 
+		end
+
+		%  Coefficients on nuisance treatments for default behavior of p-values and CIs
+		if length(txvars) > 1 
+			for kk = 1:length(nuisanceTx)
+				b_nuisance(kk) = table2array(estimates(nuisanceTx{kk},'Estimate')); 
+			end
+		end
+		if Noisily  % under Noisily mode, replay the model 
+			lme
+		end 
+
 
 	elseif strcmp(model,'re') 
 		re_model = rereg(DATA,outcome,[txvars Controls] ,groupvar ) ; 
