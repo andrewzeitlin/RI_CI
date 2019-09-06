@@ -153,11 +153,10 @@ function [beta, varargout] = ri_ci(DATA, outcome, txvars, varargin) % model, sta
 		end
 
 		%  Estimate LME model
-		lme = fitlme(DATA,formula)
+		lme = fitlme(DATA,formula) ; % TODO: consider movign to fitlmematrix() instead?
 
 		%  Extract coefficients 
 		%  Extracting parameter estimates and t statistics 
-		%  TODO:  confirm that we control the order in which these things are being extracted!!!.  Maybe make the table first?
 		[~,~,estimates] = fixedEffects(lme); 
 		estimates = dataset2table(estimates);
 		%  Remove the '_1' that fitlme() adds to indicator variable names, so that they match the supplied parameters exactly, if those parameters match the data.

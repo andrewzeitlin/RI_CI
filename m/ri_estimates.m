@@ -78,12 +78,8 @@ function [pvalue TEST0 test1 y0 ] = ri_estimates(DATA,outcome,txvars,tau0, model
 			if strcmp(model, 're')
 				testStat = getTestStat(y0,txvars,TheTx,t0,model,TestType,'Controls',Controls,'Support',Support,'x',x,'g',g); 
 			elseif strcmp(model, 'lme')
-				%  TODO:  replace treatment variables in memory with values from this permutation
-				%  TODO:  Then estimate
-
-
-
-
+				% DATA(:,txvars) = array2table(t0) ; % Replace treatment variables in memory with values from this permutation
+				testStat = lmeTestStat(DATA,formula,txvars,t0,TheTx,TestType) ; % estimate and extract test statistic 
 			else
 				testStat = getTestStat(y0,txvars,TheTx,t0,model,TestType,'Controls',Controls,'Support',Support,'x',x);  
 			end
@@ -98,6 +94,9 @@ function [pvalue TEST0 test1 y0 ] = ri_estimates(DATA,outcome,txvars,tau0, model
 			% Using model-specific calls for rereg to avoid creating extra copies of the dataset otherwise 
 			if strcmp(model, 're')
 				testStat = getTestStat(y0,txvars,TheTx,t0,model,TestType,'Controls',Controls,'Support',Support,'x',x,'g',g); 
+			elseif strcmp(model, 'lme')
+				% DATA(:,txvars) = array2table(t0) ; % Replace treatment variables in memory with values from this permutation
+				testStat = lmeTestStat(DATA,formula,txvars,t0,TheTx,TestType) ; % estimate and extract test statistic 
 			else
 				testStat = getTestStat(y0,txvars,TheTx,t0,model,TestType,'Controls',Controls,'Support',Support,'x',x);  
 			end
@@ -119,7 +118,8 @@ function [pvalue TEST0 test1 y0 ] = ri_estimates(DATA,outcome,txvars,tau0, model
 	end
 end
 
-function lmeTestStat = lmeTestStat(DATA,formula,TheTx,TestType) 
+function testStat = lmeTestStat(DATA,formula,txvars,t0,TheTx,TestType)
+	DATA(:,txvars) = array2table(t0) ; % substitute this permutation into DATA table as the assignment vector
 	lme = fitlme(DATA,formula); 
 	[~,~,stats] = fixedEffects(lme) ;  % extract coefficients ('Estimate') and t-stats ('tStat') . 
 	%  Check for lme's tendency to rename variables with _1 
@@ -132,7 +132,7 @@ function lmeTestStat = lmeTestStat(DATA,formula,TheTx,TestType)
 end
 
 
-function testStat = getTestStat(y0,txvars,TheTx,t0,mod el,TestType,varargin)
+function testStat = getTestStat(y0,txvars,TheTx,t0,model,TestType,varargin)
 	%  Parse input 
 	parameters = inputParser ; 
 	addOptional(parameters,'x',[]); 
