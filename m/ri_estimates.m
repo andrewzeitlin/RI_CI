@@ -57,7 +57,11 @@ function [pvalue TEST0 test1 y0 ] = ri_estimates(DATA,outcome,txvars,tau0, model
 
 	%  Now, loop over feasible randomizations, impose treatment effect, re-estimate, and extract test statistic
 	if RunParallel
-		if ShowWaitBar, pw = PoolWaitbar(P,'RI permutations'); end 
+		if ShowWaitBar
+			pw = PoolWaitbar(P,'RI permutations'); 
+		else 
+			pw = []; 
+		end 
 		parfor pp = 1 : P 
 			%  Draw treatment permutation and extract test statistic
 			t0 = permute(T0(:,pp,:),[1 3 2]);  % accommodates possibliity of multiple treatment variables
