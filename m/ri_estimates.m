@@ -35,10 +35,14 @@ function [pvalue TEST0 test1 y0 ] = ri_estimates(DATA,outcome,txvars,tau0, model
 	y0(~isnan(y0)) = min(max(y0(~isnan(y0)), Support(1)),Support(2)) ;  % impose support on non-missing values of y0
 
 	%%  SETUP 
-	if strcmp(model,'lm') || strcmp(model,'re') || strcmp(model,'lme') 	% For speed, and potential parallelizability: don't swap treatments into data table, but run this as a matrix. 
+	if strcmp(model,'lm') || strcmp(model,'re') || strcmp(model,'lme') 	
 		x = table2array(DATA(:,Controls)); 
-		if strcmp(model,'re')
+		if strcmp(model,'re') || strcmp(model,'lme') % models requiring a random-effects groupving variable (or variables)
 			g = table2array(DATA(:,GroupVar));
+		end
+		if strcmp(model,'lme')  
+			x = [ x ones(size(x,1),1) ] ;  % LME requires constant to be supplied.  More efficient to do it here than to repeatedly concatenate.
+			Controls = [ Controls 'Intercept' ] ; % adding this to list of covariates.
 		end
 	else 
 		x = []; % creating empty matrix in this case just so it can be passed to the getTestStat function without worrying about model-specific cases.
@@ -70,7 +74,6 @@ function [pvalue TEST0 test1 y0 ] = ri_estimates(DATA,outcome,txvars,tau0, model
 		end
 		if ShowWaitBar, close(hh) ; end 
 	end
-
 
 	%  Calculate left and right tails as required 
 	if ~strcmp(TestSide(1), 'right') , p_left = mean(TEST0 < repmat(TestValue,P,1)) ; end
@@ -111,11 +114,11 @@ function testStat = getTestStat(y0,txvars,TheTx,t0,model,TestType,varargin)
 		testStat = table2array(lm.Coefficients(1+find(strcmp(txvars,TheTx)), [TestType]));
 	elseif strcmp(model,'lme') 
 		lme = fitlmematrix( ...
-			[ones(size(DATA,1),1), t0, x] ...  % FE design matrix
+			[ t0, x] ...  % FE design matrix; x augmented to include intercept
 			, y0 ...  % outcome
-			, ones(size(DATA,1),1) ... % RE design matrix
+			, ones(size(y0,1),1) ... % RE design matrix
 			, g ... % grouping variable(s) 
-			, 'FixedEffectPredictors', [ 'Intercept' txvars Controls ] ...
+			, 'FixedEffectPredictors', [ txvars Controls ] ...
 			, 'RandomEffectPredictors', GroupVar ...
 			) ; 
 		[~,~,stats] = fixedEffects(lme) ;  % extract coefficients ('Estimate') and t-stats ('tStat') . 
@@ -124,8 +127,9 @@ function testStat = getTestStat(y0,txvars,TheTx,t0,model,TestType,varargin)
 		% for ii = indicators 
 		% 	stats.Name(ii) = strrep(stats.Name(ii),'_1','');
 		% end
+		stats = dataset2table(stats) ; 
 		stats.Properties.RowNames = stats.Name; % add row names 
-		testStat = stats(TheTx,TestType);
+		testStat = table2array(stats(TheTx,TestType));
 
 	elseif strcmp(model,'re') 
 		result = rereg_array(y0,[t0, x],g,[txvars Controls]) ; 
