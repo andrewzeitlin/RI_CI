@@ -142,18 +142,14 @@ function [beta, varargout] = ri_ci(DATA, outcome, txvars, varargin) % model, sta
 		end 
 
 	elseif strcmp(model,'lme')
-		%  Translate estimmation parameters into formula for lme 
-		rhs = [txvars Controls ] ; 
-		formula = [ outcome{1} ' ~ 1 ' ] ; 
-		for k = 1:length(rhs) 
-			formula = [ formula ' + ' rhs{k}] ; 
-		end	
-		for k = 1:length(groupvar)
-			formula = [ formula ' + (1 | ' groupvar{k} ' ) '] ; 
-		end
-
-		%  Estimate LME model
-		lme = fitlme(DATA,formula) ; % TODO: consider movign to fitlmematrix() instead?
+		lme = fitlmematrix( ...
+			[ones(size(DATA,1),1), table2array(DATA(:, [txvars, Controls]))] ...  % FE design matrix
+			, table2array(DATA(:,outcome)) ...  % outcome
+			, ones(size(DATA,1),1) ... % RE design matrix
+			, table2array(DATA(:, groupvar)) ... % grouping variable(s) 
+			, 'FixedEffectPredictors', [ 'Intercept' txvars Controls ] ...
+			, 'RandomEffectPredictors', groupvar ...
+			) ; 
 
 		%  Extract coefficients 
 		%  Extracting parameter estimates and t statistics 
