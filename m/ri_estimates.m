@@ -46,7 +46,7 @@ function [pvalue TEST0 test1 y0 ] = ri_estimates(DATA,outcome,txvars,tau0, model
 		end
 	else 
 		x = []; % creating empty matrix in this case just so it can be passed to the getTestStat function without worrying about model-specific cases.
-		g = [] ; % as above
+		g = NaN; % Needed because truly empty [] throws an error when used as an input argument?!?  % [] ; % as above
 	end 
 
 	%%  EXTRACT TEST STAT

@@ -1,4 +1,4 @@
-function [beta, varargout] = ri_ci(DATA, outcome, txvars, varargin) % model, stat, varargin
+function [beta, pvalue, CI, varargout] = ri_ci(DATA, outcome, txvars, varargin) % model, stat, varargin
 
 	%  Function to conduct RI, including (optionally) confidence intervals and test of the no-effect null.
 
@@ -11,7 +11,7 @@ function [beta, varargout] = ri_ci(DATA, outcome, txvars, varargin) % model, sta
 	%  TODO (2):  add plug-in principle functionality to KS test --  DGP
 
 	%  Container for outputs:
-	varargout = cell(1, nargout);
+	varargout = cell(1, nargout - 3);
 	
 	%  Parse inputs
 	params = inputParser ; 
@@ -490,10 +490,11 @@ function [beta, varargout] = ri_ci(DATA, outcome, txvars, varargin) % model, sta
 	end
 
 	% Write function outputs
-	if TestZero , varargout{1} = pvalue ; end
-	if FindCI , varargout{2} = CI ; end
-	if length(varargout) >= 3 , varargout{3} = TEST1 ; end 
-	if length(varargout) >= 4 , varargout{4} = TEST0 ; end 
-	if length(varargout) >= 5 , varargout{5} = QUERIES_UB ; end
-	if length(varargout) >= 6 , varargout{6} = QUERIES_LB ; end 
+	% beta 		<- already defined above.
+	% pvalue 	<- defined above
+	% CI 		<- defined above 
+	if length(varargout) >= 1 , varargout{1} = TEST1 ; end 
+	if length(varargout) >= 2 , varargout{2} = TEST0 ; end 
+	if length(varargout) >= 3 , varargout{3} = QUERIES_UB ; end
+	if length(varargout) >= 4 , varargout{4} = QUERIES_LB ; end 
 end
