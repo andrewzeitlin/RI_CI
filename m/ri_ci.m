@@ -492,8 +492,8 @@ function [beta, varargout] = ri_ci(DATA, outcome, txvars, varargin) % model, sta
 	% Write function outputs
 	if TestZero , varargout{1} = pvalue ; end
 	if FindCI , varargout{2} = CI ; end
-	if nargout >= 3 , varargout{3} = TEST1 ; end 
-	if nargout >= 4 , varargout{4} = TEST0 ; end 
-	if nargout >= 5 , varargout{5} = QUERIES_UB ; end
-	if nargout >= 6 , varargout{6} = QUERIES_LB ; end 
+	if length(varargout) >= 3 , varargout{3} = TEST1 ; end 
+	if length(varargout) >= 4 , varargout{4} = TEST0 ; end 
+	if length(varargout) >= 5 , varargout{5} = QUERIES_UB ; end
+	if length(varargout) >= 6 , varargout{6} = QUERIES_LB ; end 
 end
