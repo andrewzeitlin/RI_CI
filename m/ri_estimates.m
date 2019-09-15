@@ -54,6 +54,7 @@ function [pvalue TEST0 test1 y0 ] = ri_estimates(DATA,outcome,txvars,tau0, model
 	if length(TestValue) == 0
 		TestValue = getTestStat(y0,txvars,TheTx,t1,model,TestType,'Controls',Controls,'Support',Support,'x',x,'g',g,'GroupVar',GroupVar);  
 	end
+	test1 = TestValue ; % for output purposes, if (optionally) requested.
 
 	%  Now, loop over feasible randomizations, impose treatment effect, re-estimate, and extract test statistic
 	if RunParallel
@@ -117,7 +118,7 @@ function testStat = getTestStat(y0,txvars,TheTx,t0,model,TestType,varargin)
 		end
 	elseif strcmp(model,'lm')
 		lm = fitlm([t0 , x ], y0) ; % 
-		testStat = table2array(lm.Coefficients(1+find(strcmp(txvars,TheTx)), [TestType]));
+		testStat = table2array(lm.Coefficients(1+find(strcmp(txvars,TheTx)), [TestType]));  % TODO:  link this to the name of the variable of interest in a coefficient matrix, not to the assumed numerical index of that variable!
 	elseif strcmp(model,'lme') 
 		lme = fitlmematrix( ...
 			[ t0, x] ...  % FE design matrix; x augmented to include intercept

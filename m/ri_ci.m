@@ -126,7 +126,7 @@ function [beta, varargout] = ri_ci(DATA, outcome, txvars, varargin) % model, sta
 	%  Estimate the model using the actual assignment.  Save point estimate as beta; obtain test statistic.  
 	if strcmp(model,'lm')
 		lm = fitlm(DATA(:,[txvars Controls outcome])) ;
-		TEST1 = table2array(lm.Coefficients([TheTx],[TestType]))'; 
+		% TEST1 = table2array(lm.Coefficients([TheTx],[TestType]))'; 
 
 		beta = table2array(lm.Coefficients(TheTx,'Estimate')); 
 		%  Inputs into starting values for search for 95% CI
@@ -181,7 +181,7 @@ function [beta, varargout] = ri_ci(DATA, outcome, txvars, varargin) % model, sta
 
 	elseif strcmp(model,'re') 
 		re_model = rereg(DATA,outcome,[txvars Controls] ,GroupVar ) ; 
-		TEST1 = table2array(re_model([TheTx],[TestType]));
+		% TEST1 = table2array(re_model([TheTx],[TestType]));
 		beta = table2array(re_model(TheTx,{'Estimate'}));
 		if FindCI 
 			se = table2array(re_model(TheTx,{'SE'}));
@@ -203,7 +203,7 @@ function [beta, varargout] = ri_ci(DATA, outcome, txvars, varargin) % model, sta
 			ydd = table2array(DATA(:,outcome));
 			ydd = ydd - mean(ydd); 
 		end
-		[~,~,TEST1] = kstest2(ydd(tx==0),ydd(tx==1)); % two-sample KS stat
+		%  [~,~,TEST1] = kstest2(ydd(tx==0),ydd(tx==1)); % two-sample KS stat
 
 		%  For the KS test with any subsequent testing
 		%  replace outcome variable in DATA with residualized version
@@ -225,7 +225,7 @@ function [beta, varargout] = ri_ci(DATA, outcome, txvars, varargin) % model, sta
 		if PlugIn && length(txvars) > 1
 			tau0(~strcmp(txvars,TheTx)) = b_nuisance ; 
 		end
-		[ pvalue TEST0 ] = ri_estimates(DATA,outcome,txvars,tau0 ...
+		[ pvalue TEST0 TEST1 ] = ri_estimates(DATA,outcome,txvars,tau0 ...
 			, model,T0,P ...
 			, 'TheTx', TheTx ...
 			, 'Controls', Controls ... 
