@@ -1,4 +1,4 @@
-function [beta, pvalue, CI, varargout] = ri_ci(DATA, outcome, txvars, varargin) % model, stat, varargin
+function [beta, N, pvalue, CI, varargout] = ri_ci(DATA, outcome, txvars, varargin) % model, stat, varargin
 
 	%  Function to conduct RI, including (optionally) confidence intervals and test of the no-effect null.
 
@@ -100,6 +100,9 @@ function [beta, pvalue, CI, varargout] = ri_ci(DATA, outcome, txvars, varargin) 
         	T0 = T0(tokeep,:,:) ;
         end
     end
+
+    %  Extract number of observations.
+    N = size(DATA,1); 
 	
 	%  If control set not empty, check for categorical variables, and expand to a set of dummies. 
 	%  Then replace variable names in Controls
