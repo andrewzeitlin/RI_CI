@@ -11,7 +11,7 @@ function [beta, N, pvalue, CI, varargout] = ri_ci(DATA, outcome, txvars, varargi
 	%  TODO (2):  add plug-in principle functionality to KS test --  DGP
 
 	%  Container for outputs:
-	varargout = cell(1, nargout - 3);
+	varargout = cell(1, nargout - 4);
 	
 	%  Parse inputs
 	params = inputParser ; 
@@ -223,6 +223,10 @@ function [beta, N, pvalue, CI, varargout] = ri_ci(DATA, outcome, txvars, varargi
 		se   = table2array(lm.Coefficients(TheTx,'SE')); 
 	end
 
+	%----------------------------------------------------------------------%
+	%--  P-VALUES  --------------------------------------------------------%
+	%----------------------------------------------------------------------%
+
 	%  Conduct RI on the model, using the point estimmate as a point of comparison. Two-sided test, null hypothesis as specified by user (parameter tau0). 
 	if TestZero 
 		if PlugIn && length(txvars) > 1
@@ -235,14 +239,17 @@ function [beta, N, pvalue, CI, varargout] = ri_ci(DATA, outcome, txvars, varargi
 			, 'TestType', TestType ...
 			, 'TestSide',TestSide ...
 			, 'GroupVar',GroupVar ...
-			, 'RunParallel', RunParallel ...
+			, 'RunParallel', true ...
 			, 'ShowWaitBar', Noisily ... 
 			, 'WaitMessage', ['Outcome ' outcome ': Now conducting test of zero null'] ... 
 			) ; 
+	else 
+		pvalue = {}; 
 	end
 
 	%----------------------------------------------------------------------%
-	%  If requested, find confidence interval
+	%--  CONFIDENCE INTERVALS  --------------------------------------------%
+	%----------------------------------------------------------------------%
 	if FindCI 
 
 		%  Confirm that p-value at boundaries of search region are below significance threshold
@@ -490,10 +497,16 @@ function [beta, N, pvalue, CI, varargout] = ri_ci(DATA, outcome, txvars, varargi
 
 		%  Return CI as a vector
 		CI = [CI_LB , CI_UB];
+	else 
+		CI = {} ; % to avoid needing to change output arguments when CI is not requested
 	end
 
+	%--------------------------------------------------------------------------%
+	%%  WRITE FUNCTION OUTPUTS 
+	%--------------------------------------------------------------------------%
 	% Write function outputs
 	% beta 		<- already defined above.
+	% N 		<- already defined above.
 	% pvalue 	<- defined above
 	% CI 		<- defined above 
 	if length(varargout) >= 1 , varargout{1} = TEST1 ; end 

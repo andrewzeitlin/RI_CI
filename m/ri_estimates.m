@@ -4,7 +4,7 @@ function [pvalue TEST0 test1 y0 ] = ri_estimates(DATA,outcome,txvars,tau0, model
 
 	%  Unpack.
 	options = inputParser ; 
-	addOptional(options,'GroupVar',{});
+	addOptional(options,'GroupVar',{{}});
 	addOptional(options,'TheTx',{}) ;
 	addOptional(options,'TestSide','twosided');
 	addOptional(options,'TestValue',{});
@@ -39,6 +39,8 @@ function [pvalue TEST0 test1 y0 ] = ri_estimates(DATA,outcome,txvars,tau0, model
 		x = table2array(DATA(:,Controls)); 
 		if strcmp(model,'re') || strcmp(model,'lme') % models requiring a random-effects groupving variable (or variables)
 			g = table2array(DATA(:,GroupVar));
+		else 
+			g = {{}} ; % pass empty cell array if this argument is not relevant.
 		end
 		if strcmp(model,'lme')  
 			x = [ x ones(size(x,1),1) ] ;  % LME requires constant to be supplied.  More efficient to do it here than to repeatedly concatenate.
