@@ -168,7 +168,7 @@ function [beta, N, pvalue, CI, varargout] = ri_ci(DATA, outcome, txvars, varargi
 		[~,~,estimates] = fixedEffects(lme); 
 		estimates = dataset2table(estimates);
 		%  Remove the '_1' that fitlme() adds to indicator variable names, so that they match the supplied parameters exactly, if those parameters match the data.
-		indicators = find(contains(estimates.Name,'_1')) ; 
+		indicators = find(contains(estimates.Name,'_1'))' ; 
 		for ii = indicators 
 			estimates.Name(ii) = strrep(estimates.Name(ii),'_1','');
 		end
@@ -206,9 +206,10 @@ function [beta, N, pvalue, CI, varargout] = ri_ci(DATA, outcome, txvars, varargi
 		end 
 	elseif strcmp(model,'ks')
 		% TODO:  Allow residualization of outcome at this stage, then used residualized outcome for all subsequent analysis.
+		%%%%%%  QUESTION:  DOES FRISCH-WAUGH MEAN WE SHOULD RESIDUALIZE **CONTROLS** WRT TREATMENTS BEFORE EXTRACTING THEIR (PARTIAL) EFFECT ON TREATMENT?  ***  REVIEW: PETER HULL NOTES. ***
 		if length(Controls)> 0 | length(txvars) > 1
 			y = table2array(DATA(:,outcome)) ; 
-			rhs = [ones(size(y)),table2array(DATA(:,[~strcmp(txvars,tx),Controls]))];
+			rhs = [ones(size(y)),table2array(DATA(:,[txvars(~strcmp(txvars,tx)),Controls]))];
 			bb = rhs\y ;        % regression coefficient
 			ydd = y - rhs*bb ;  % residuals 
 		else 
