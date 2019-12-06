@@ -228,9 +228,10 @@ function [beta, N, pvalue, CI, varargout] = ri_ci(DATA, outcome, txvars, varargi
 
 		%  use simple linear regression to initialize search region,
 		%  and to return point estimate as <beta>
-		lm = fitlm(tx,ydd);
-		beta = table2array(lm.Coefficients(TheTx,'Estimate')); 
-		se   = table2array(lm.Coefficients(TheTx,'SE')); 
+		% NB lm implemented in matrix form, so no meaningful variable names here. But constant is added in 1st position. 
+		lm = fitlm(tx,ydd) ; 
+		beta = table2array(lm.Coefficients(2,'Estimate')); 
+		se   = table2array(lm.Coefficients(2,'SE')); 
 	end
 
 	%----------------------------------------------------------------------%
