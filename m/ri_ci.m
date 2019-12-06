@@ -133,15 +133,25 @@ function [beta, N, pvalue, CI, varargout] = ri_ci(DATA, outcome, txvars, varargi
 		if Noisily  % under Noisily mode, replay the model 
 			lm
 		end 
+		estimates = lm.Coefficients; 
+		%  Check LM results for indicator variables where _1 suffix has been added; strip this.
+		indicators = find(contains(estimates.Properties.RowNames,'_1'))' ; 
+		for ii = indicators 
+			ii
+			%  Check if abbreviated form exists in list of covariates in model. If so, strip suffix.
+			if sum(strcmp(strrep(estimates.Properties.RowNames(ii),'_1',''), txvars )) > 0 
+				estimates.Properties.RowNames(ii) = strrep(estimates.Properties.RowNames(ii),'_1','') ; 
+			end
+		end
 
-		beta = table2array(lm.Coefficients(TheTx,'Estimate')); 
+		beta = table2array(estimates(TheTx,'Estimate')); 
 		%  Inputs into starting values for search for 95% CI
 		if FindCI 
-			se   = table2array(lm.Coefficients(TheTx,'SE')); 
+			se   = table2array(estimates(TheTx,'SE')); 
 		end
 		%  Coefficients on nuisance treatments for default behavior of p-values and CIs
 		if length(txvars) > 1 
-			b_nuisance = table2array(lm.Coefficients(nuisanceTx,'Estimate')); 
+			b_nuisance = table2array(estimates(nuisanceTx,'Estimate')); 
 		end
 
 	elseif strcmp(model,'lme')
