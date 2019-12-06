@@ -128,8 +128,11 @@ function [beta, N, pvalue, CI, varargout] = ri_ci(DATA, outcome, txvars, varargi
 
 	%  Estimate the model using the actual assignment.  Save point estimate as beta; obtain test statistic.  
 	if strcmp(model,'lm')
-		lm = fitlm(DATA(:,[txvars Controls outcome])) ;
+		lm = fitlm(DATA(:,[txvars Controls outcome])) ; 
 		% TEST1 = table2array(lm.Coefficients([TheTx],[TestType]))'; 
+		if Noisily  % under Noisily mode, replay the model 
+			lm
+		end 
 
 		beta = table2array(lm.Coefficients(TheTx,'Estimate')); 
 		%  Inputs into starting values for search for 95% CI
@@ -140,9 +143,6 @@ function [beta, N, pvalue, CI, varargout] = ri_ci(DATA, outcome, txvars, varargi
 		if length(txvars) > 1 
 			b_nuisance = table2array(lm.Coefficients(nuisanceTx,'Estimate')); 
 		end
-		if Noisily  % under Noisily mode, replay the model 
-			lm
-		end 
 
 	elseif strcmp(model,'lme')
 		lme = fitlmematrix( ...
