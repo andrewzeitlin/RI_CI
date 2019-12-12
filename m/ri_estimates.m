@@ -113,7 +113,7 @@ function testStat = getTestStat(y0,txvars,TheTx,t0,model,TestType,varargin)
 
 	if strcmp(model, 'ks')
 		if length(txvars) > 1 
-			tx = t0(find(strcmp(txvars,TheTx)));
+			tx = t0(:,find(strcmp(txvars,TheTx)));
 			[~,~,testStat ] = kstest2(y0(tx==1),y0(tx==0)) ; % two-sample KS stat
 		else 
 			[~,~,testStat ] = kstest2(y0(t0==1),y0(t0==0)) ; % two-sample KS stat

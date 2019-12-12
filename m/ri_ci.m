@@ -68,7 +68,6 @@ function [beta, N, pvalue, CI, varargout] = ri_ci(DATA, outcome, txvars, varargi
 	if length(TheTx) == 0 
 		TheTx = txvars(1) ; % if no treatment variable specified, assume this is the first entryy in txvars
 	end
-	tx = table2array(DATA(:,TheTx)) ; 
 	if size(tau0,1) > size(tau0,2) 
 		error('null treatment vector tau0 should be (1 x K) not (K x 1)');
 	end
@@ -205,33 +204,52 @@ function [beta, N, pvalue, CI, varargout] = ri_ci(DATA, outcome, txvars, varargi
 			re_model 
 		end 
 	elseif strcmp(model,'ks')
-		% TODO:  Allow residualization of outcome at this stage, then used residualized outcome for all subsequent analysis.
-		%%%%%%  QUESTION:  DOES FRISCH-WAUGH MEAN WE SHOULD RESIDUALIZE **CONTROLS** WRT TREATMENTS BEFORE EXTRACTING THEIR (PARTIAL) EFFECT ON TREATMENT?  ***  REVIEW: PETER HULL NOTES. ***
-		if length(Controls)> 0 | length(txvars) > 1
+		if length(Controls)> 0 
 			y = table2array(DATA(:,outcome)) ; 
-			rhs = [ones(size(y)),table2array(DATA(:,[txvars(~strcmp(txvars,tx)),Controls]))];
+			rhs = ones(size(y)) ; % initializing the covariate set 
+			%  Residualize controls based on treatments and then add them to the covariate set.
+			itx = [ones(size(y)),DATA(:,txvars)] ; % treatments and a constant. 
+			for k = 1:length(Controls) 
+				x = DATA(:,Controls(k)); 
+				bx = itx \ x;  % residualizing control x
+				xdd = x - itx*bx ; 
+				rhs = [rhs, xdd] ; 
+			end
+			%  Now, residualize outcome wrt controls 
 			bb = rhs\y ;        % regression coefficient
 			ydd = y - rhs*bb ;  % residuals 
 		else 
 			ydd = table2array(DATA(:,outcome));
 			ydd = ydd - mean(ydd); 
 		end
-		%  [~,~,TEST1] = kstest2(ydd(tx==0),ydd(tx==1)); % two-sample KS stat
 
-		%  For the KS test with any subsequent testing
-		%  replace outcome variable in DATA with residualized version
+		%  Replace outcome variable in DATA with residualized version
 		%  and get rid of Controls 
-		if TestZero || FindCI 
-			DATA(:,outcome) = array2table(ydd);
-			Controls = {}; %  These have already been used to residualize.
+		DATA(:,outcome) = array2table(ydd);
+		Controls = {}; %  These have already been used to residualize.
+
+		%  use simple linear regression to initialize search region, return point estimate as <beta>
+		lm = fitlm(DATA(:,[txvars outcome])); 
+		estimates = lm.Coefficients; 
+		%  Check LM results for indicator variables where _1 suffix has been added; strip this.
+		indicators = find(contains(estimates.Properties.RowNames,'_1'))' ; 
+		for ii = indicators 
+			%  Check if abbreviated form exists in list of covariates in model. If so, strip suffix.
+			if sum(strcmp(strrep(estimates.Properties.RowNames(ii),'_1',''), txvars )) > 0 
+				estimates.Properties.RowNames(ii) = strrep(estimates.Properties.RowNames(ii),'_1','') ; 
+			end
 		end
 
-		%  use simple linear regression to initialize search region,
-		%  and to return point estimate as <beta>
-		% NB lm implemented in matrix form, so no meaningful variable names here. But constant is added in 1st position. 
-		lm = fitlm(tx,ydd) ; 
-		beta = table2array(lm.Coefficients(2,'Estimate')); 
-		se   = table2array(lm.Coefficients(2,'SE')); 
+		%  Extract model results of interest
+		beta = table2array(estimates(TheTx,'Estimate')); 
+		%  Inputs into starting values for search for 95% CI
+		if FindCI 
+			se   = table2array(estimates(TheTx,'SE')); 
+		end
+		%  Coefficients on nuisance treatments for default behavior of p-values and CIs
+		if length(txvars) > 1 
+			b_nuisance = table2array(estimates(nuisanceTx,'Estimate')); 
+		end
 	end
 
 	%----------------------------------------------------------------------%
