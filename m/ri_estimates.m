@@ -35,7 +35,7 @@ function [pvalue TEST0 test1 y0 ] = ri_estimates(DATA,outcome,txvars,tau0, model
 	y0(~isnan(y0)) = min(max(y0(~isnan(y0)), Support(1)),Support(2)) ;  % impose support on non-missing values of y0
 
 	%%  SETUP 
-	if strcmp(model,'lm') || strcmp(model,'re') || strcmp(model,'lme') 	
+	if strcmp(model,'lm') | strcmp(model,'re') | strcmp(model,'lme') 	
 		x = table2array(DATA(:,Controls)); 
 		if strcmp(model,'re') || strcmp(model,'lme') % models requiring a random-effects groupving variable (or variables)
 			g = table2array(DATA(:,GroupVar));
