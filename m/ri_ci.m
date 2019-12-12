@@ -25,7 +25,7 @@ function [beta, N, pvalue, CI, varargout] = ri_ci(DATA, outcome, txvars, varargi
 	addOptional(params,'FindCI',false);  			%  Switch: locate confidence interval
 	addOptional(params,'CIguess',[0 0 0 0 ]);		% initial guess for confidence interval. Specified as a range around the lower bound (1st and second arguments) and a range around the upper bound (2nd and third arguments)
 	addOptional(params,'CiSearchSize', 20) ; 		% default SDs of search width on EITHER side of the parameter estimate to search for CI (if CIguess not specified). 
-	addOptional(params,'MaxQueries',10); 			% maximum number of trials to find each end of the confidence interval
+	addOptional(params,'MaxQueries',100); 			% maximum number of trials to find each end of the confidence interval
 	addOptional(params,'MinStepSize',0); 			% minimum step size for stopping rule.
 	addOptional(params,'SignificanceLevel',0.05); 	% alpha for CI
 	addOptional(params,'ShowMainEstimates',false); 	% to replay results of primary estimate.
