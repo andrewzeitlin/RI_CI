@@ -5,7 +5,7 @@ function [pvalue TEST0 test1 y0 ] = ri_estimates(DATA,outcome,txvars,tau0, model
 	%  Unpack.
 	options = inputParser ; 
 	addOptional(options,'GroupVar',{{}});	% group variable for random effects or clustered estimates
-	addOptional(params,'WeightVar',{}); 			
+	addOptional(options,'WeightVar',{}); 			
 	addOptional(options,'TheTx',{}) ;
 	addOptional(options,'TestSide','twosided');
 	addOptional(options,'TestValue',{});
@@ -19,7 +19,7 @@ function [pvalue TEST0 test1 y0 ] = ri_estimates(DATA,outcome,txvars,tau0, model
 
 	parse(options,varargin{:}); 
 	GroupVar = options.Results.GroupVar; 
-	WeightVar = params.Results.WeightVar; 
+	WeightVar = options.Results.WeightVar; 
 	TheTx = options.Results.TheTx ;
 	TestSide = options.Results.TestSide; 
 	TestValue = options.Results.TestValue; 
@@ -117,7 +117,7 @@ function testStat = getTestStat(y0,txvars,TheTx,t0,model,TestType,varargin)
 	x = parameters.Results.x;
 	Controls = parameters.Results.Controls;
 	GroupVar = parameters.Results.GroupVar;
-	Weights = parameters.Results.WeightVar ; 
+	Weights = parameters.Results.Weights ; 
 	Support = parameters.Results.Support; 
 	g = parameters.Results.g; 	
 
