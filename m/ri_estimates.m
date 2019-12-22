@@ -4,7 +4,8 @@ function [pvalue TEST0 test1 y0 ] = ri_estimates(DATA,outcome,txvars,tau0, model
 
 	%  Unpack.
 	options = inputParser ; 
-	addOptional(options,'GroupVar',{{}});
+	addOptional(options,'GroupVar',{{}});	% group variable for random effects or clustered estimates
+	addOptional(params,'WeightVar',{}); 			
 	addOptional(options,'TheTx',{}) ;
 	addOptional(options,'TestSide','twosided');
 	addOptional(options,'TestValue',{});
@@ -18,6 +19,7 @@ function [pvalue TEST0 test1 y0 ] = ri_estimates(DATA,outcome,txvars,tau0, model
 
 	parse(options,varargin{:}); 
 	GroupVar = options.Results.GroupVar; 
+	WeightVar = params.Results.WeightVar; 
 	TheTx = options.Results.TheTx ;
 	TestSide = options.Results.TestSide; 
 	TestValue = options.Results.TestValue; 
@@ -51,10 +53,17 @@ function [pvalue TEST0 test1 y0 ] = ri_estimates(DATA,outcome,txvars,tau0, model
 		g = NaN; % Needed because truly empty [] throws an error when used as an input argument?!?  % [] ; % as above
 	end 
 
+	% Weights, currently supported for use with -lm- only.
+	if strcmp(model,'lm') 
+		Weights = table2array(DATA(:,WeightVar)) ; %  This would have been specified or generated as a vector of ones in the calling program, ri_ci(). 
+	else 
+		Weights = [] ; % To be passed to testStat() function.
+	end
+
 	%%  EXTRACT TEST STAT
 	%  Estimate test statistic on the hypothesized y0 using the *actual* assignment
 	if length(TestValue) == 0
-		TestValue = getTestStat(y0,txvars,TheTx,t1,model,TestType,'Controls',Controls,'Support',Support,'x',x,'g',g,'GroupVar',GroupVar);  
+		TestValue = getTestStat(y0,txvars,TheTx,t1,model,TestType,'Controls',Controls,'Support',Support,'x',x,'g',g,'GroupVar',GroupVar,'Weights',Weights);  
 	end
 	test1 = TestValue ; % for output purposes, if (optionally) requested.
 
@@ -68,7 +77,7 @@ function [pvalue TEST0 test1 y0 ] = ri_estimates(DATA,outcome,txvars,tau0, model
 		parfor pp = 1 : P 
 			%  Draw treatment permutation and extract test statistic
 			t0 = permute(T0(:,pp,:),[1 3 2]);  % accommodates possibliity of multiple treatment variables
-			testStat = getTestStat(y0,txvars,TheTx,t0,model,TestType,'Controls',Controls,'Support',Support,'x',x,'g',g,'GroupVar',GroupVar); 
+			testStat = getTestStat(y0,txvars,TheTx,t0,model,TestType,'Controls',Controls,'Support',Support,'x',x,'g',g,'GroupVar',GroupVar,'Weights',Weights); 
 			TEST0(pp,:) = testStat;
 			if ShowWaitBar, increment(pw); end 
 		end
@@ -77,7 +86,7 @@ function [pvalue TEST0 test1 y0 ] = ri_estimates(DATA,outcome,txvars,tau0, model
 		for pp = 1 : P
 			%  Draw treatment permutation and extract test statistic
 			t0 = permute(T0(:,pp,:),[1 3 2]);  % accommodates possibliity of multiple treatment variables
-			testStat = getTestStat(y0,txvars,TheTx,t0,model,TestType,'Controls',Controls,'Support',Support,'x',x,'g',g,'GroupVar',GroupVar); 
+			testStat = getTestStat(y0,txvars,TheTx,t0,model,TestType,'Controls',Controls,'Support',Support,'x',x,'g',g,'GroupVar',GroupVar,'Weights',Weights); 
 			TEST0(pp,:) = testStat;
 			if ShowWaitBar, waitbar(pp/P); end 
 		end
@@ -101,12 +110,14 @@ function testStat = getTestStat(y0,txvars,TheTx,t0,model,TestType,varargin)
 	addOptional(parameters,'x',[]); 
 	addOptional(parameters,'Controls',{});
 	addOptional(parameters,'Support',[-inf,inf]);
+	addOptional(parameters,'Weights',[]) ; % vector of weights, for use with lm.
 	addOptional(parameters,'g',[]);
 	addOptional(parameters,'GroupVar',{}); 
 	parse(parameters,varargin{:}); 
 	x = parameters.Results.x;
 	Controls = parameters.Results.Controls;
 	GroupVar = parameters.Results.GroupVar;
+	Weights = parameters.Results.WeightVar ; 
 	Support = parameters.Results.Support; 
 	g = parameters.Results.g; 	
 
@@ -119,8 +130,8 @@ function testStat = getTestStat(y0,txvars,TheTx,t0,model,TestType,varargin)
 			[~,~,testStat ] = kstest2(y0(t0==1),y0(t0==0)) ; % two-sample KS stat
 		end
 	elseif strcmp(model,'lm')
-		lm = fitlm([t0 , x ], y0) ; % 
-		testStat = table2array(lm.Coefficients(1+find(strcmp(txvars,TheTx)), [TestType]));  % TODO:  link this to the name of the variable of interest in a coefficient matrix, not to the assumed numerical index of that variable!
+		lm = fitlm([t0 , x ], y0, 'Weights', Weights ) ; % 
+		testStat = table2array(lm.Coefficients(1+find(strcmp(txvars,TheTx)), [TestType]));  % TODO:  link this to the name of the variable of interest in a coefficient matrix, not to the (assumed) numerical index of that variable.
 	elseif strcmp(model,'lme') 
 		lme = fitlmematrix( ...
 			[ t0, x] ...  % FE design matrix; x augmented to include intercept
@@ -131,11 +142,6 @@ function testStat = getTestStat(y0,txvars,TheTx,t0,model,TestType,varargin)
 			, 'RandomEffectPredictors', GroupVar ...
 			) ; 
 		[~,~,stats] = fixedEffects(lme) ;  % extract coefficients ('Estimate') and t-stats ('tStat') . 
-		%  Check for lme's tendency to rename variables with _1 %%  NOT NECESSARY WITH MATRIX VERSION AND MANUAL NAMING OF VARIABLES?
-		% indicators = find(contains(stats.Name,'_1')) ; 
-		% for ii = indicators 
-		% 	stats.Name(ii) = strrep(stats.Name(ii),'_1','');
-		% end
 		stats = dataset2table(stats) ; 
 		stats.Properties.RowNames = stats.Name; % add row names 
 		testStat = table2array(stats(TheTx,TestType));

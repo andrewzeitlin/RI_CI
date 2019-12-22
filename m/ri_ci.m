@@ -31,6 +31,7 @@ function [beta, N, pvalue, CI, varargout] = ri_ci(DATA, outcome, txvars, varargi
 	addOptional(params,'ShowMainEstimates',false); 	% to replay results of primary estimate.
 	addOptional(params,'CheckBoundaries',true); 	% check boundaries for CI esitmation.
 	addOptional(params,'GroupVar',{}); 			% group variable for random effects or clustered estimates
+	addOptional(params,'WeightVar',{}); 			% group variable for random effects or clustered estimates
 	addOptional(params,'TheTx',{}); 				% for vector-valued treatments, this cell array contains the name of the treatment of interest.
 	addOptional(params,'tau0',[] ) ; 				%  null to test if reporting a p-value. 
 	addOptional(params,'PlugIn',true); 		%  use plug-in estimate of nuisance variables for test of zero null and construction of CIs. Overrides specified tau0 for nuisance treatments
@@ -59,6 +60,7 @@ function [beta, N, pvalue, CI, varargout] = ri_ci(DATA, outcome, txvars, varargi
 	MinStepSize = params.Results.MinStepSize; 
 	SignificanceLevel = params.Results.SignificanceLevel;  
 	GroupVar = params.Results.GroupVar; 
+	WeightVar = params.Results.WeightVar; 
 	tau0 = params.Results.tau0 ; 
 	RunParallel = params.Results.RunParallel; 
 	Noisily = params.Results.Noisily; 
@@ -75,6 +77,12 @@ function [beta, N, pvalue, CI, varargout] = ri_ci(DATA, outcome, txvars, varargi
 	if (strcmp(model,'re') || strcmp(model,'lme')) && isempty(GroupVar)
 		error('Random effects model requires option GroupVar to be specified.')
 	end
+	%  Populate a weight variable (as constants) if none exists.
+	if strcmp(mode,'lm') && isempty(WeightVar)
+		DATA.uniform_weight_vector = ones(size(DATA,1),1);
+		WeightVar = 'uniform_weight_vector' ; 
+	end
+
 	%  Require parameter TestSide set to right for KS test
 	if strcmp(model,'ks') && ~strcmp(TestSide,'right')
 		error('For the KS test, must specify a right-tailed p-value')
@@ -92,8 +100,8 @@ function [beta, N, pvalue, CI, varargout] = ri_ci(DATA, outcome, txvars, varargi
 
 	%  CHECK FOR MISSINGS IN ANALYTIC VARIABLES. 
 	% IF ANY, REMOVE FROM DATA AND POTENTIAL ASSIGNMENTS (as appropriate) 
-    if sum(max(ismissing(DATA(:,[outcome txvars Controls GroupVar])),[],2)) > 0 
-        tokeep = min( ~ismissing(DATA(:,[outcome txvars Controls GroupVar])), [], 2);
+    if sum(max(ismissing(DATA(:,[outcome txvars Controls GroupVar WeightVar])),[],2)) > 0 
+        tokeep = min( ~ismissing(DATA(:,[outcome txvars Controls GroupVar Weightvar])), [], 2);
         DATA = DATA(tokeep,:) ; 
         if TestZero || FindCI % either of these requires the set of potential assignments
         	T0 = T0(tokeep,:,:) ;
@@ -127,7 +135,7 @@ function [beta, N, pvalue, CI, varargout] = ri_ci(DATA, outcome, txvars, varargi
 
 	%  Estimate the model using the actual assignment.  Save point estimate as beta; obtain test statistic.  
 	if strcmp(model,'lm')
-		lm = fitlm(DATA(:,[txvars Controls outcome])) ; 
+		lm = fitlm(DATA(:,[txvars Controls outcome]),'Weights',WeightVar) ; 
 		% TEST1 = table2array(lm.Coefficients([TheTx],[TestType]))'; 
 		if Noisily  % under Noisily mode, replay the model 
 			lm
@@ -332,6 +340,7 @@ function [beta, N, pvalue, CI, varargout] = ri_ci(DATA, outcome, txvars, varargi
 					, 'TestSide' , 'twosided' ... 
 					, 'RunParallel', RunParallel ...
 					, 'GroupVar',GroupVar ...
+					, 'WeightVar', WeightVar ...
 					); 
 				p_lb = ri_estimates( ...
 					DATA, outcome,txvars,tau_prime_lb ...
@@ -342,6 +351,7 @@ function [beta, N, pvalue, CI, varargout] = ri_ci(DATA, outcome, txvars, varargi
 					, 'TestType', TestType ... 
 					, 'TestSide', 'twosided' ... % change back to 'left'
 					, 'GroupVar',GroupVar ...
+					, 'WeightVar', WeightVar ...
 					, 'RunParallel', RunParallel ...
 					);
 			end
@@ -415,6 +425,7 @@ function [beta, N, pvalue, CI, varargout] = ri_ci(DATA, outcome, txvars, varargi
 					, 'TestType', TestType ... 
 					, 'TestSide', 'twosided' ... % 'right' ...
 					, 'GroupVar',GroupVar ...
+					, 'WeightVar', WeightVar ...
 					, 'RunParallel', RunParallel ...
 					); 
 			end
@@ -489,6 +500,7 @@ function [beta, N, pvalue, CI, varargout] = ri_ci(DATA, outcome, txvars, varargi
 					, 'TestType',TestType ...
 					, 'TestSide','twosided' ...
 					, 'GroupVar',GroupVar ...
+					, 'WeightVar', WeightVar ...
 					, 'RunParallel', RunParallel ...
 					); 
 			end 
