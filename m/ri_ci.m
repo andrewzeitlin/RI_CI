@@ -101,7 +101,7 @@ function [beta, N, pvalue, CI, varargout] = ri_ci(DATA, outcome, txvars, varargi
 	%  CHECK FOR MISSINGS IN ANALYTIC VARIABLES. 
 	% IF ANY, REMOVE FROM DATA AND POTENTIAL ASSIGNMENTS (as appropriate) 
     if sum(max(ismissing(DATA(:,[outcome txvars Controls GroupVar WeightVar])),[],2)) > 0 
-        tokeep = min( ~ismissing(DATA(:,[outcome txvars Controls GroupVar Weightvar])), [], 2);
+        tokeep = min( ~ismissing(DATA(:,[outcome txvars Controls GroupVar WeightVar])), [], 2);
         DATA = DATA(tokeep,:) ; 
         if TestZero || FindCI % either of these requires the set of potential assignments
         	T0 = T0(tokeep,:,:) ;
