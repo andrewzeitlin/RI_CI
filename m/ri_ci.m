@@ -66,6 +66,10 @@ function [beta, N, pvalue, CI, varargout] = ri_ci(DATA, outcome, txvars, varargi
 	Noisily = params.Results.Noisily; 
 	CiSearchSize = params.Results.CiSearchSize ; 
 
+	%  If txvars or TheTx is specified as a character vector, convert to cell array.
+	if ischar(txvars), txvars = {txvars}; end 
+	if ischar(TheTx), TheTx = {TheTx}; end 
+
 	%  If treatment assignment is vector-valued, need to decide which variable will be basis for the test for CI purposes.
 	if length(TheTx) == 0 
 		TheTx = txvars(1) ; % if no treatment variable specified, assume this is the first entryy in txvars
