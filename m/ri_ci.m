@@ -74,9 +74,6 @@ function [beta, N, pvalue, CI, varargout] = ri_ci(DATA, outcome, txvars, varargi
 	if length(TheTx) == 0 
 		TheTx = txvars(1) ; % if no treatment variable specified, assume this is the first entryy in txvars
 	end
-	if size(tau0,1) > size(tau0,2) 
-		error('null treatment vector tau0 should be (1 x K) not (K x 1)');
-	end
 	%  Require GroupVar to be specified for re model
 	if (strcmp(model,'re') || strcmp(model,'lme')) && isempty(GroupVar)
 		error('Random effects model requires option GroupVar to be specified.')
