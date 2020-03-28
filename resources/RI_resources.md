@@ -2,7 +2,7 @@
 
 While Imbens & Rubin (2015) (pdf copy [here](https://github.com/andrewzeitlin/RI_CI/tree/master/resources)) is the canonical text on RI, here's a list of primers and gentler introductions to the topic that may be useful.
 
-1. Donald Green (of [Field Experiments: Design, Analysis, & Interpretation (2012)](https://www.amazon.com/Field-Experiments-Design-Analysis-Interpretation/dp/0393979954))) has a simple and effective introduction along with R code [here](https://egap.org/methods-guides/10-things-randomization-inference). 
+1. Donald Green (of [Field Experiments: Design, Analysis, & Interpretation (2012)](https://www.amazon.com/Field-Experiments-Design-Analysis-Interpretation/dp/0393979954)) has a simple and effective introduction along with R code [here](https://egap.org/methods-guides/10-things-randomization-inference). 
 
 2. Matthew Blackwell ([website](https://www.mattblackwell.org/)) has a really useful set of [lecture notes](https://www.mattblackwell.org/files/teaching/s05-fisher.pdf) on RI that lays out the material succinctly and even goes into test statistics and confidence intervals.
 
