@@ -385,7 +385,7 @@ function [beta, N, pvalue, CI, varargout] = ri_ci(DATA, outcome, txvars, varargi
 		%  CI.1.  Find upper boundary of CI. -------------------------------------%
 		if mean(CIguess==0) == 1  % case where no search region has been specified
 			lb = beta ;
-			ub = beta + CiSearchSize*1.96*se ; 
+			ub = beta + CiSearchSize*1*se ; 
 		else 
 			lb = CIguess(3);
 			ub = CIguess(4); 
@@ -463,7 +463,7 @@ function [beta, N, pvalue, CI, varargout] = ri_ci(DATA, outcome, txvars, varargi
 		%  Find lower boundary of CI. -------------------------------------%
 		if mean(CIguess==0) == 1  % case where no search region has been specified
 			ub = beta ;
-			lb = beta - CiSearchSize*1.96*se ; 
+			lb = beta - CiSearchSize*1*se ; 
 		else 
 			ub = CIguess(2);
 			lb = CIguess(1);
