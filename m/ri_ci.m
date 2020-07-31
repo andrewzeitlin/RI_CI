@@ -382,10 +382,10 @@ function [beta, N, pvalue, CI, varargout] = ri_ci(DATA, outcome, txvars, varargi
 			axis([lb ub 0 0.25]);
 			hold on 
 			figwidth = ub - lb ;
-			rectangle('Position',[lb, 0, figwidth, 0.025],'EdgeColor','none','FaceColor',[0.75 0.75 0.75]);
+			rectangle('Position',[lb, 0, figwidth, 0.05],'EdgeColor','none','FaceColor',[0.75 0.75 0.75]);
 			line([beta beta] , [0 1],'LineStyle','--','Color','b') % vertical line at point estimate 
 			xlabel('Coefficient estimate')
-			ylabel('p-value') 
+			ylabel('Two-sided p-value') 
 		end 
 
 		%  CI.1.  Find upper boundary of CI. -------------------------------------%
