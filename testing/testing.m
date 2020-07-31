@@ -173,17 +173,20 @@ ylabel('p-value')
 legend('Analytic', 'RI')  
 hold off 
 
+
 %  Visualize correspondence between estimated p-values and CI lower bounds (note tau > 0 so ignoring upper bound for now). 
 figure(2) 
 clf 
+plot(RESULTS.p_ri, RESULTS.tau_hat)
 hold on 
 plot(RESULTS.p_ri, RESULTS.ci_lower)
 plot(RESULTS.p_ri, RESULTS.ci_upper)
 scatter(RESULTS.p_ri, RESULTS.ci_lower)  
-scatter(RESULTS.p_ri, RESULTS.ci_upper)  
+scatter(RESULTS.p_ri, RESULTS.ci_upper)
+patch([RESULTS.p_ri', fliplr(RESULTS.p_ri')], [RESULTS.ci_lower', fliplr(RESULTS.ci_upper')], 'b','FaceAlpha',0.2)   
 yline(0) ;
 xline(0.05) ; 
 xlabel('RI p-value') 
-ylabel('CI lower bound') 
+ylabel('Estimates') 
 hold off 
 
