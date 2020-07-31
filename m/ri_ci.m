@@ -451,7 +451,7 @@ function [beta, N, pvalue, CI, varargout] = ri_ci(DATA, outcome, txvars, varargi
 
 			%  If reject, move left.  Otherwise, move right.
 			if q > 1, m0 = middle ; end % store previous tested value if appropriate
-			if p <= SignificanceLevel/2
+			if p <= SignificanceLevel  % /2  Two-sided test doubles the p-value in the relevant tail
 				ub = middle;
 				middle = (ub + lb ) / 2;  
 			else
@@ -469,7 +469,7 @@ function [beta, N, pvalue, CI, varargout] = ri_ci(DATA, outcome, txvars, varargi
 		end
 		%  Remove unused entries from queries table
 		QUERIES_UB = QUERIES_UB(~isnan(QUERIES_UB(:,1)),:);
-		CI_UB = max(QUERIES_UB(QUERIES_UB(:,2) >= SignificanceLevel/2, 1)) ; 
+		CI_UB = max(QUERIES_UB(QUERIES_UB(:,2) >= SignificanceLevel, 1)); %SignificanceLevel/2, 1)) ;   <- Two-sided test doubles the p-value in the relevant tail
 
 		%  Find lower boundary of CI. -------------------------------------%
 		if mean(CIguess==0) == 1  % case where no search region has been specified
@@ -533,7 +533,7 @@ function [beta, N, pvalue, CI, varargout] = ri_ci(DATA, outcome, txvars, varargi
 
 			%  If reject, move left.  Otherwise, move right.
 			if q > 1, m0 = middle ; end % store previous tested value if appropriate
-			if p <= SignificanceLevel/2
+			if p <= SignificanceLevel  %/2    <- Two-sided test doubles the p-value in the relevant tail
 				lb = middle;
 				middle = (ub + lb ) / 2;  
 			else
@@ -550,7 +550,7 @@ function [beta, N, pvalue, CI, varargout] = ri_ci(DATA, outcome, txvars, varargi
 			q = q+1;
 		end
 		QUERIES_LB = QUERIES_LB(~isnan(QUERIES_LB(:,1)),:);
-		CI_LB = min(QUERIES_LB( QUERIES_LB(:,2) >= SignificanceLevel/2, 1)); 
+		CI_LB = min(QUERIES_LB( QUERIES_LB(:,2) >= SignificanceLevel, 1 )); % SignificanceLevel/2, 1));   <- Two-sided test doubles the p-value in the relevant tail
 
 		%  Release the figure 
 		if Noisily
