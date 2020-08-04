@@ -69,11 +69,22 @@ function [pvalue TEST0 test1 y0 ] = ri_estimates(DATA,outcome,txvars,tau0, model
 
 	%  Now, loop over feasible randomizations, impose treatment effect, re-estimate, and extract test statistic
 	if RunParallel
+
+		%  For parallel pool, create parallel pool constants to pass to parfor loop
+		T0 = parallel.pool.Constant(T0);
+		y0 = parallel.pool.Constant(y0);
+		x = parallel.pool.Constant(x); 
+		g = parallel.pool.Constant(g); 
+		Weights = parallel.pool.Constant(Weights); 
+
+		%  Initialize wait bar
 		if ShowWaitBar
 			pw = PoolWaitbar(P,'RI permutations'); 
 		else 
 			pw = []; 
 		end 
+
+		%  parfor loop
 		parfor pp = 1 : P 
 			%  Draw treatment permutation and extract test statistic
 			t0 = permute(T0(:,pp,:),[1 3 2]);  % accommodates possibliity of multiple treatment variables
