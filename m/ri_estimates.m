@@ -71,12 +71,12 @@ function [pvalue TEST0 test1 y0 ] = ri_estimates(DATA,outcome,txvars,tau0, model
 	if RunParallel
 
 		%  For parallel pool, create parallel pool constants to pass to parfor loop
-		T0 = parallel.pool.Constant(T0);
-		y0 = parallel.pool.Constant(y0);
-		x = parallel.pool.Constant(x); 
-		g = parallel.pool.Constant(g); 
-		Weights = parallel.pool.Constant(Weights); 
-
+		% T0 = parallel.pool.Constant(T0);
+		% y0 = parallel.pool.Constant(y0);
+		% x = parallel.pool.Constant(x); 
+		% g = parallel.pool.Constant(g); 
+		% Weights = parallel.pool.Constant(Weights); 
+		
 		%  Initialize wait bar
 		if ShowWaitBar
 			pw = PoolWaitbar(P,'RI permutations'); 
@@ -86,8 +86,10 @@ function [pvalue TEST0 test1 y0 ] = ri_estimates(DATA,outcome,txvars,tau0, model
 
 		%  parfor loop
 		parfor pp = 1 : P 
+			T0 ; % forcing this to be broadcast;
+
 			%  Draw treatment permutation and extract test statistic
-			t0 = permute(T0(:,pp,:),[1 3 2]);  % accommodates possibliity of multiple treatment variables
+			t0 = permute(T0(:,pp,:),[1 3 2]);  % accommodates possibility of multiple treatment variables
 			testStat = getTestStat(y0,txvars,TheTx,t0,model,TestType,'Controls',Controls,'Support',Support,'x',x,'g',g,'GroupVar',GroupVar,'Weights',Weights); 
 			TEST0(pp,:) = testStat;
 			if ShowWaitBar, increment(pw); end 
