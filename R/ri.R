@@ -9,20 +9,40 @@ ri <- function(df,model,tx,T0,stat='b',clusters=NULL){
     R <- dim(T0)[2] # Number of replications to consider.
   }
   
+  #  Extract number of models.  
+  if (model[[1]]=='~'){
+    M <- 1
+  }else{
+    M <- length(model)
+  }
+  
   #  Point estimate 
-  lm1 <- lm_robust(model,df,clusters=clusters)
-  if (K==1){
-    if (!is.function(stat)){
-      if (stat=='b') {
-        results$teststat <- lm1$coefficients[tx]
-      }else if (stat=='t'){
-        results$teststat <- lm1$coefficients[tx] / lm1$std.error[tx]
-      }else{
-        results$teststat <- stat(lm1) 
+  if (M==1){
+    lm1 <- lm_robust(model,df,clusters=clusters)
+  }else{
+    models1 <- vector(mode='list',length=M)
+    for (m in 1:M){
+      models1[[m]] <- lm_robust(model[m],df,clusters=clusters)
+    }
+  }
+  
+  #  Test statistic under the realized treatment
+  if (M==1){
+    if (K==1){
+      if (!is.function(stat)){
+        if (stat=='b') {
+          results$teststat <- lm1$coefficients[tx]
+        }else if (stat=='t'){
+          results$teststat <- lm1$coefficients[tx] / lm1$std.error[tx]
+        }else{
+          results$teststat <- stat(lm1) 
+        }
       }
+    }else{
+      results$teststat <- stat(lm1) 
     }
   }else{
-    results$teststat <- stat(lm1) 
+    restults$teststat <- stat(models1) 
   }
   
   #  Distribution of test statistic under the null 
@@ -39,21 +59,32 @@ ri <- function(df,model,tx,T0,stat='b',clusters=NULL){
     }
         
     #  Estimate model
-    lm0 <- lm_robust(model,df,clusters=clusters)
+    if (M==1){
+      lm0 <- lm_robust(model,df,clusters=clusters)
+    }else{
+      models0 <- vector(mode='list',length=M)
+      for (m in 1:M){
+        models0[[m]] <- lm_robust(model[m],df,clusters=clusters)
+      }
+    }
     
     #  Extract test statistic for this permutation
-    if (K==1){
-      if (!is.function(stat)){
-        if (stat=='b') {
-          results$testdistribution[r,] <- lm0$coefficients[tx]
-        }else if (stat=='t'){
-          results$testdistribution[r,] <- lm0$coefficients[tx] / lm0$std.error[tx]
+    if (M==1){
+      if (K==1){
+        if (!is.function(stat)){
+          if (stat=='b') {
+            results$testdistribution[r,] <- lm0$coefficients[tx]
+          }else if (stat=='t'){
+            results$testdistribution[r,] <- lm0$coefficients[tx] / lm0$std.error[tx]
+          }
+        }else{
+          results$testdistribution[r,] <- stat(lm0)
         }
       }else{
         results$testdistribution[r,] <- stat(lm0)
       }
     }else{
-      results$testdistribution[r,] <- stat(lm0)
+      restults$teststat <- stat(models0) 
     }
   }
   
