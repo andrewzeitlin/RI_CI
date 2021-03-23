@@ -6,6 +6,7 @@ ri <- function(df,model,tx,T0,stat='b',clusters=NULL){
     K <- length(T0)
     R <- dim(T0[[1]])[2] # Use the first object in the list to determine number of reps.
   }else{
+    K <- length(tx)
     R <- dim(T0)[2] # Number of replications to consider.
   }
   
