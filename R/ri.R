@@ -10,12 +10,20 @@ ri <- function(df,model,tx,T0,stat='b',clusters=NULL){
     R <- dim(T0)[2] # Number of replications to consider.
   }
   
-  #  Extract number of models.  
+  #  Extract number of models and associated dependent variable(s)
   if (model[[1]]=='~'){
     M <- 1
+    # Extract dependent variable name.
+    outcome <- as.character(model[[2]])  
   }else{
     M <- length(model)
+    
+    #  Dependent variable(s)
+    for (m in 1:M){
+      outcome[m] <-model[m][[2]]
+    }
   }
+  
   
   #  Point estimate 
   if (M==1){
@@ -27,6 +35,7 @@ ri <- function(df,model,tx,T0,stat='b',clusters=NULL){
     }
   }
   
+  
   #  Test statistic under the realized treatment
   if (M==1){
     if (K==1){
@@ -36,14 +45,28 @@ ri <- function(df,model,tx,T0,stat='b',clusters=NULL){
         }else if (stat=='t'){
           results$teststat <- lm1$coefficients[tx] / lm1$std.error[tx]
         }else{
-          results$teststat <- stat(lm1) 
+          #  Pass lm results to stat() function. 
+          #  If two arguments required, second is assumed to be the data frame (used in KS stat).
+          if (length(formals(stat))==1){
+            results$teststat <- stat(lm1) 
+          }else{
+            results$teststat <- stat(lm1,df) 
+          }
         }
       }
     }else{
-      results$teststat <- stat(lm1) 
+      if (length(formals(stat))==1){
+        results$teststat <- stat(lm1) 
+      }else{
+        results$teststat <- stat(lm1,df)
+      }
     }
   }else{
-    restults$teststat <- stat(models1) 
+    if (length(formals(stat))==1){
+      results$teststat <- stat(models1) 
+    }else{
+      results$teststat <- stat(models1,df) 
+    }
   }
   
   #  Distribution of test statistic under the null 
@@ -79,10 +102,18 @@ ri <- function(df,model,tx,T0,stat='b',clusters=NULL){
             results$testdistribution[r,] <- lm0$coefficients[tx] / lm0$std.error[tx]
           }
         }else{
-          results$testdistribution[r,] <- stat(lm0)
+          if (length(formals(stat))==1){
+            results$testdistribution[r,] <- stat(lm0)
+          }else{
+            results$testdistribution[r,] <- stat(lm0,df)
+          }
         }
       }else{
-        results$testdistribution[r,] <- stat(lm0)
+        if (length(formals(stat))==1){
+          results$testdistribution[r,] <- stat(lm0)
+        }else{
+          results$testdistribution[r,] <- stat(lm0,df)    
+        }
       }
     }else{
       restults$teststat <- stat(models0) 
