@@ -46,7 +46,8 @@ ri <- function(df,model,tx,T0,stat='b',clusters=NULL){
           results$teststat <- lm1$coefficients[tx] / lm1$std.error[tx]
         }else{
           #  Pass lm results to stat() function. 
-          #  If two arguments required, second is assumed to be the data frame (used in KS stat).
+          #  If two arguments required, second is assumed to be the data frame 
+          #  (this is used in residualized KS stat).
           if (length(formals(stat))==1){
             results$teststat <- stat(lm1) 
           }else{
