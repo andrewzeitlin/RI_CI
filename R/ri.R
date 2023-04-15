@@ -1,5 +1,26 @@
-ri <- function(df,model,tx,T0,stat='b',clusters=NULL){
+ri <- function(df,model,tx,T0,stat='b',clusters=NULL, parallelize = FALSE, parallel.cores = NULL){
   results <- list() # Container for results. 
+  
+  #  Generically required packages
+  require(estimatr)
+  
+  #  Initialize parallel processing
+  if (parallelize){
+    
+    #  Require packages used for parallel implementation
+    require(foreach) 
+    require(doParallel)
+    
+    #  If number of cores to use not specified, default to *all*
+    if (is.null(parallel.cores)){
+      parallel.cores <- detectCores()
+    }
+    cl <- makeCluster(parallel.cores)
+    registerDoParallel(cl)
+  } else{
+    registerDoSEQ()
+  }
+  
   
   #  Extract number of repetitions. Depends on whether T0 is a list of matrices/dataframes or a single dataframe
   if (is.null(dim(T0))){
@@ -71,8 +92,10 @@ ri <- function(df,model,tx,T0,stat='b',clusters=NULL){
   }
   
   #  Distribution of test statistic under the null 
-  results$testdistribution <- matrix(data=NA,nrow=R,ncol=length(tx))
-  for (r in 1:R){
+  results$testdistribution <- foreach(
+    r = 1:R,
+    .packages = c('estimatr') 
+    ) %dopar% {
     
     #  Replace treatment variables as needed
     if (K==1){
@@ -98,33 +121,48 @@ ri <- function(df,model,tx,T0,stat='b',clusters=NULL){
       if (K==1){
         if (!is.function(stat)){
           if (stat=='b') {
-            results$testdistribution[r,] <- lm0$coefficients[tx]
+            # results$testdistribution[r,] 
+            this_result <- lm0$coefficients[tx]
           }else if (stat=='t'){
-            results$testdistribution[r,] <- lm0$coefficients[tx] / lm0$std.error[tx]
+            # results$testdistribution[r,] 
+            this_result <- lm0$coefficients[tx] / lm0$std.error[tx]
           }
         }else{
           if (length(formals(stat))==1){
-            results$testdistribution[r,] <- stat(lm0)
+            #results$testdistribution[r,] 
+            this_result <- stat(lm0)
           }else{
-            results$testdistribution[r,] <- stat(lm0,df)
+            #results$testdistribution[r,] 
+            this_result <- stat(lm0,df)
           }
         }
       }else{
         if (length(formals(stat))==1){
-          results$testdistribution[r,] <- stat(lm0)
+          # results$testdistribution[r,] 
+          this_result <- stat(lm0)
         }else{
-          results$testdistribution[r,] <- stat(lm0,df)    
+          # results$testdistribution[r,] 
+          this_result <- stat(lm0,df)    
         }
       }
     }else{
-      restults$teststat <- stat(models0) 
+      #restults$teststat <- 
+      this_result <- stat(models0) 
     }
+      
+    this_result
   }
+  
+  
+  #  Close parallel session
+  if (parallelize) stopCluster(cl)
+  
   
   #  Calculate p-value: two-sided test. 
   results$p.left <- mean(results$testdistribution < results$teststat)
   results$p.right <- mean(results$testdistribution > results$teststat) 
   results$p <- min(2*min(results$p.left, results$p.right),1)
-    
+  
+  
   return(results)
 }
