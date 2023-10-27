@@ -1,168 +1,110 @@
-ri <- function(df,model,tx,T0,stat='b',clusters=NULL, parallelize = FALSE, parallel.cores = NULL){
+ri <- function(df,model,tx,T0,stat='b',R=NULL, parallelize=TRUE, ...){
   results <- list() # Container for results. 
   
-  #  Generically required packages
-  require(estimatr)
+  #  Packages
+  require(fixest)
+  require(foreach)
+  require(doParallel)
   
-  #  Initialize parallel processing
-  if (parallelize){
-    
-    #  Require packages used for parallel implementation
-    require(foreach) 
-    require(doParallel)
-    
-    #  If number of cores to use not specified, default to *all*
-    if (is.null(parallel.cores)){
-      parallel.cores <- detectCores()
+  #  Unpack optional arguments, if supplied
+  args <- list(...)
+  if (length(args) > 0){
+    for(i in 1:length(args)) {
+      assign(x = names(args)[i], args[[i]])
     }
-    cl <- makeCluster(parallel.cores)
-    registerDoParallel(cl)
-  } else{
+  }
+  
+  #  Set up parallel back-end
+  if (parallelize){
+    if (getDoParWorkers() > 1) {
+      already.set.up <- TRUE
+    }else{
+      already.set.up <- FALSE
+      all.cores <- detectCores()
+      cl <- makeCluster(all.cores - 1)
+      registerDoParallel(cl) # Leaving 1 core for headroom.
+    }
+  }else{
     registerDoSEQ()
   }
   
-  
-  #  Extract number of repetitions. Depends on whether T0 is a list of matrices/dataframes or a single dataframe
-  if (is.null(dim(T0))){
-    K <- length(T0)
-    R <- dim(T0[[1]])[2] # Use the first object in the list to determine number of reps.
-  }else{
-    K <- length(tx)
-    R <- dim(T0)[2] # Number of replications to consider.
+  #  If user does not supply a number of repetitions, take this from the width of the first permutation matrix
+  if (is.null(R)){
+    R <- dim(T0[[1]])[2] -1 # Number of replications to consider, minus one column for the identifer.
   }
   
-  #  Extract number of models and associated dependent variable(s)
-  if (model[[1]]=='~'){
-    M <- 1
-    # Extract dependent variable name.
-    outcome <- as.character(model[[2]])  
-  }else{
-    M <- length(model)
-    
-    #  Dependent variable(s)
-    for (m in 1:M){
-      outcome[m] <-model[m][[2]]
-    }
+  #  Expand feasible randomizations and remove identifier (assumes this is variable `schoolid`).
+  to_permute <- names(T0) 
+  for (txvar in to_permute){
+    T0[[txvar]] <- df %>%
+      select(schoolid) %>%
+      left_join(
+        .,
+        T0[[txvar]],
+        by='schoolid'
+      ) %>%
+      select(-schoolid)
   }
   
+  #  If using fixest, set dataset to the argument "df" 
+  if (any(grepl('feols', model, fixed=TRUE))){
+    setFixest_estimation(data=df)
+  }
   
   #  Point estimate 
-  if (M==1){
-    lm1 <- lm_robust(model,df,clusters=clusters)
-  }else{
-    models1 <- vector(mode='list',length=M)
-    for (m in 1:M){
-      models1[[m]] <- lm_robust(model[m],df,clusters=clusters)
-    }
+  lm1 <- eval(model) 
+  if (stat=='b') {
+    results$teststat <- lm1$coefficients[tx]
+  }else if (stat=='t'){
+    results$teststat <- lm1$coefficients[tx] / lm1$se[tx]
   }
   
   
-  #  Test statistic under the realized treatment
-  if (M==1){
-    if (K==1){
-      if (!is.function(stat)){
-        if (stat=='b') {
-          results$teststat <- lm1$coefficients[tx]
-        }else if (stat=='t'){
-          results$teststat <- lm1$coefficients[tx] / lm1$std.error[tx]
-        }else{
-          #  Pass lm results to stat() function. 
-          #  If two arguments required, second is assumed to be the data frame 
-          #  (this is used in residualized KS stat).
-          if (length(formals(stat))==1){
-            results$teststat <- stat(lm1) 
-          }else{
-            results$teststat <- stat(lm1,df) 
-          }
-        }
-      }
-    }else{
-      if (length(formals(stat))==1){
-        results$teststat <- stat(lm1) 
-      }else{
-        results$teststat <- stat(lm1,df)
-      }
-    }
-  }else{
-    if (length(formals(stat))==1){
-      results$teststat <- stat(models1) 
-    }else{
-      results$teststat <- stat(models1,df) 
-    }
-  }
+  ################################################################
+  #  Distribution of test statistic under the null -------------------------
+  ################################################################
   
-  #  Distribution of test statistic under the null 
-  results$testdistribution <- foreach(
-    r = 1:R,
-    .packages = c('estimatr') 
-    ) %dopar% {
+  results$testdistribution <- matrix(data=NA,nrow=R,ncol=length(tx))
+  
+  #  Begin loop (parallel)
+  results$testdistribution <- foreach (r=1:R,.combine=rbind, .export=names(args)) %dopar% { # for (r in 1:R){
     
-    #  Replace treatment variables as needed
-    if (K==1){
-      df[,tx] <- T0[,r]
-    }else{
-      for (k in 1:K){
-        df[,tx[k]] <- T0[[k]][,r]
-      }
-    }
-        
-    #  Estimate model
-    if (M==1){
-      lm0 <- lm_robust(model,df,clusters=clusters)
-    }else{
-      models0 <- vector(mode='list',length=M)
-      for (m in 1:M){
-        models0[[m]] <- lm_robust(model[m],df,clusters=clusters)
-      }
-    }
+    library(dplyr)
+    library(haven)
+    library(fixest) 
     
-    #  Extract test statistic for this permutation
-    if (M==1){
-      if (K==1){
-        if (!is.function(stat)){
-          if (stat=='b') {
-            # results$testdistribution[r,] 
-            this_result <- lm0$coefficients[tx]
-          }else if (stat=='t'){
-            # results$testdistribution[r,] 
-            this_result <- lm0$coefficients[tx] / lm0$std.error[tx]
-          }
-        }else{
-          if (length(formals(stat))==1){
-            #results$testdistribution[r,] 
-            this_result <- stat(lm0)
-          }else{
-            #results$testdistribution[r,] 
-            this_result <- stat(lm0,df)
-          }
-        }
-      }else{
-        if (length(formals(stat))==1){
-          # results$testdistribution[r,] 
-          this_result <- stat(lm0)
-        }else{
-          # results$testdistribution[r,] 
-          this_result <- stat(lm0,df)    
-        }
-      }
-    }else{
-      #restults$teststat <- 
-      this_result <- stat(models0) 
+    for (txvar in to_permute){
+      df[,txvar] <- T0[[txvar]][,r]
     }
-      
-    this_result
+  
+    #  If using fixest, set dataset to the argument "df" 
+    if (any(grepl('feols', model, fixed=TRUE))){
+      setFixest_estimation(data=df)
+    }
+
+    #  Estimate the model    
+    lm0 <- eval(model) 
+    
+    #  Extract test stat
+    if (stat=='b') {
+      results$testdistribution[r,] <- lm0$coefficients[tx]
+    }else if (stat=='t'){
+      results$testdistribution[r,] <- lm0$coefficients[tx] / lm0$se[tx]
+    }else{
+      results$testdistribution[r,] <- eval(stat) # Allows passing arbitrary expressions
+    }
   }
-  
-  
-  #  Close parallel session
-  if (parallelize) stopCluster(cl)
-  
   
   #  Calculate p-value: two-sided test. 
   results$p.left <- mean(results$testdistribution < results$teststat)
   results$p.right <- mean(results$testdistribution > results$teststat) 
   results$p <- min(2*min(results$p.left, results$p.right),1)
+    
+  #  Release fixest data frame, if set
+  if (any(grepl('feols', model, fixed=TRUE))) setFixest_estimation(reset=TRUE)
   
+  #  Release parallel works, if set up under this script
+  if (parallelize & !already.set.up) stopImplicitCluster() # stopCluster(cl)
   
   return(results)
 }
