@@ -138,8 +138,6 @@ p1 <- ggplot(data.frame(t = null_dist), aes(x = t)) +
 
 print(p1)
 
-#  Write figure to file
-ggsave("RI_null_dist_example1.png", plot = p1, width = 6, height = 4, dpi = 300)
 
 #------------------------------------------------------------------------------#
 #  4. Quoted call interface                                                  ----
