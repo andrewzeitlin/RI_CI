@@ -80,10 +80,11 @@ T0 <- list(treated = T0_treated)
 #  and the SE is expected to be stable across permutations.
 #
 #  Memory optimisations (fixest only, active when stat = 'b' or 't'):
-#  ri() automatically injects lean = TRUE (suppresses score matrix, fitted
-#  values, and residuals at construction time) into any unqualified feols()
-#  call in the model.  The same fields are also
-#  nulled post-fit as a safety net.  Set lean = FALSE in the ri() call to
+#  ri() automatically injects lean = TRUE into any unqualified feols(),
+#  fepois(), or feglm() call in the model, suppressing score matrix, fitted
+#  values, and residuals at construction time.  When n.cores > 1, nthreads=1
+#  is also injected to prevent CPU oversubscription.  The same large fields
+#  are nulled post-fit as a safety net.  Set lean = FALSE in the ri() call to
 #  disable injection (e.g. when a custom stat needs model-matrix data).
 #------------------------------------------------------------------------------#
 
@@ -401,6 +402,79 @@ cat("── Example 8: interaction t*x; only t permuted ──\n")
 cat(sprintf("  Observed Wald stat : %.3f  (alpha=0.3, gamma=0.4)\n",
             as.numeric(res8$teststat)))
 cat(sprintf("  RI p-value         : %.3f\n\n", as.numeric(res8$p)))
+
+
+#------------------------------------------------------------------------------#
+#  9. Poisson QMLE (fepois) — non-negative unbounded outcome                ----
+#
+#  For outcomes that are non-negative and unbounded from above (e.g. profits,
+#  sales, transfer values), Poisson quasi-maximum likelihood is preferred over
+#  OLS on an IHS-transformed outcome.  The PPML estimator (Santos Silva &
+#  Tenreyro 2006) is consistent for the conditional mean E[y | x] = exp(x'β)
+#  regardless of the true distribution — it is a quasi-MLE, not a true Poisson
+#  model.  Coefficients are semi-elasticities (log-point treatment effects).
+#
+#  ri() injection: lean = TRUE and nthreads = 1L (when n.cores > 1) are
+#  automatically injected into any unqualified fepois() call, just as for
+#  feols().  No changes to the calling code are required.
+#
+#  DGP: E[y | treat, fe] = exp(mu_cluster + alpha * treat), y ~ Poisson.
+#  True semi-elasticity alpha = 0.4.
+#------------------------------------------------------------------------------#
+
+set.seed(20260303 + 9L)
+
+#  Cluster-level intercepts (log-scale) + Poisson draws
+mu_cluster <- setNames(rnorm(K, mean = 3, sd = 0.5),
+                       paste0("cl_", formatC(seq_len(K), width = 2, flag = "0")))
+alpha_pois  <- 0.4   # true semi-elasticity
+
+lambda9 <- exp(mu_cluster[cluster_id] + alpha_pois * treated)
+df9 <- data.frame(
+    unit_id    = unit_id,
+    cluster_id = cluster_id,
+    treated    = treated,
+    y_count    = rpois(N, lambda = lambda9)
+)
+
+cat("── Example 9: fepois (Poisson QMLE) on a non-negative count outcome ──\n")
+cat(sprintf("  True semi-elasticity alpha = %.1f\n", alpha_pois))
+cat(sprintf("  Outcome: Poisson with mean in [%.1f, %.1f]; %d zeros\n",
+            min(lambda9), max(lambda9), sum(df9$y_count == 0)))
+
+tic("Example 9")
+res9 <- ri(
+    df    = df9,
+    model = function(df) fepois(y_count ~ treated | cluster_id, cluster = ~cluster_id,
+                                data = df, warn = FALSE, notes = FALSE),
+    tx    = "treated",
+    T0    = T0,        # same permutation table as Examples 1–6
+    id    = "unit_id",
+    n.cores = 1L
+)
+toc()
+
+cat(sprintf("  Observed t-stat : %.3f\n",   res9$teststat))
+cat(sprintf("  RI p-value      : %.3f\n\n", res9$p))
+
+#  Sanity check: fepois and feols give the same RI p-value order-of-magnitude.
+#  (The test statistics differ in scale; the p-values should both be small
+#   given alpha = 0.4 and N = 300.)
+tic("Example 9b: feols on IHS for comparison")
+res9b <- ri(
+    df    = transform(df9, y_ihs = log(y_count + sqrt(y_count^2 + 1))),
+    model = function(df) feols(y_ihs ~ treated | cluster_id, cluster = ~cluster_id,
+                               data = df, warn = FALSE, notes = FALSE),
+    tx    = "treated",
+    T0    = T0,
+    id    = "unit_id",
+    n.cores = 1L
+)
+toc()
+
+cat("── Example 9b: feols on IHS(y_count) for comparison ──\n")
+cat(sprintf("  Observed t-stat : %.3f\n",   res9b$teststat))
+cat(sprintf("  RI p-value      : %.3f\n\n", res9b$p))
 
 
 #------------------------------------------------------------------------------#

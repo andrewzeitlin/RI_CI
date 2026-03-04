@@ -13,11 +13,13 @@ ri <- function(
                     #     or function(fit)->numeric; see extract_stat below
     R       = NULL, # permutations to use; default = all columns in T0 after dropping id
     n.cores = NULL, # NULL=auto-detect (SLURM_CPUS_PER_TASK, then detectCores()-1); 1L=serial
-    lean    = TRUE  # inject lean=TRUE into unqualified feols() calls inside the
-                    # model function, suppressing large internal objects at construction
-                    # time.  Set FALSE to disable (e.g. custom stat= needing model-matrix
-                    # data).  Has no effect on fixest::feols() qualified calls or
-                    # non-fixest model functions.
+    lean    = TRUE  # inject lean=TRUE (and nthreads=1 when n.cores>1) into any
+                    # unqualified feols(), fepois(), or feglm() call inside the model
+                    # function, suppressing large internal objects at construction time
+                    # and preventing CPU oversubscription.  Set FALSE to disable (e.g.
+                    # custom stat= needing model-matrix data).  Has no effect on
+                    # namespace-qualified calls (fixest::feols() etc.) or non-fixest
+                    # model functions.
 ) {
 
     #--------------------------------------------------------------------------#
@@ -160,17 +162,21 @@ ri <- function(
     #  or 't' (disabled for custom stat functions, which may need the full fit):
     #
     #  (1) Pre-estimation injection (lean = TRUE, default): ri() rewrites
-    #      call_model to shadow any unqualified feols() call with a wrapper
-    #      that injects lean = TRUE (suppresses score matrix, fitted values,
-    #      residuals at construction time — the deeper saving).
-    #      For stat = 'b', also injects only.coef = TRUE, which skips SE
-    #      computation entirely and returns a named numeric vector.
-    #      Does NOT intercept fixest::feols() qualified calls.
+    #      call_model to shadow any unqualified feols(), fepois(), and feglm()
+    #      calls with wrappers that inject:
+    #        lean = TRUE      — suppresses scores, fitted values, residuals at
+    #                           construction time (the deeper saving).
+    #        only.coef = TRUE — (stat = 'b' only) skips SE computation; the
+    #                           estimator returns a named numeric vector.
+    #        nthreads = 1L    — (n.cores > 1 only) prevents CPU oversubscription
+    #                           when ri() is already parallelising across
+    #                           permutations via mclapply / parLapply.
+    #      Does NOT intercept namespace-qualified calls (fixest::feols(), etc.).
     #      Environment setup is done ONCE at ri() call time, not per permutation.
     #
     #  (2) Post-fit stripping: after each fit is returned, ri() also nulls
     #      the same large fields as a safety net, covering cases where
-    #      injection was disabled or the call used fixest::feols() directly.
+    #      injection was disabled or a qualified call was used.
     #      (When only.coef = TRUE the fit is a numeric vector; strip_fit is
     #      a no-op in that case since it checks inherits(fit, "fixest").)
     #--------------------------------------------------------------------------#
@@ -187,30 +193,41 @@ ri <- function(
     }
 
     if (lean && do_strip && isNamespaceLoaded("fixest")) {
-        .feols_lean <- local({
-            base <- fixest::feols
-            oc   <- do_only_coef
+        #  Factory: build a lean wrapper for any fixest estimator.
+        #  Captures do_only_coef and n.cores in its closure at setup time.
+        .make_lean <- function(base_fn) {
+            oc <- do_only_coef
+            n1 <- n.cores > 1L
             function(...) {
                 args <- list(...)
-                if (is.null(args[["lean"]]))      args[["lean"]]      <- TRUE
-                if (oc && is.null(args[["only.coef"]])) args[["only.coef"]] <- TRUE
-                do.call(base, args)
+                if (is.null(args[["lean"]]))               args[["lean"]]      <- TRUE
+                if (oc && is.null(args[["only.coef"]]))    args[["only.coef"]] <- TRUE
+                if (n1 && is.null(args[["nthreads"]]))     args[["nthreads"]]  <- 1L
+                do.call(base_fn, args)
             }
-        })
+        }
+        .feols_lean  <- .make_lean(fixest::feols)
+        .fepois_lean <- .make_lean(fixest::fepois)
+        .feglm_lean  <- .make_lean(fixest::feglm)
+
         if (is.function(model)) {
             #  Create the injected function ONCE at setup time.
-            #  Shadowing feols in the model's lexical scope via a fresh
+            #  Shadowing estimators in the model's lexical scope via a fresh
             #  parent environment means new.env() runs only here, not per
             #  permutation.
-            .env_inject       <- new.env(parent = environment(model))
-            .env_inject$feols <- .feols_lean
-            .fn_injected      <- model
+            .env_inject        <- new.env(parent = environment(model))
+            .env_inject$feols  <- .feols_lean
+            .env_inject$fepois <- .fepois_lean
+            .env_inject$feglm  <- .feglm_lean
+            .fn_injected       <- model
             environment(.fn_injected) <- .env_inject
             call_model <- function(dat) .fn_injected(dat)
         } else {
             call_model <- function(dat) {
-                df    <- dat
-                feols <- .feols_lean
+                df     <- dat
+                feols  <- .feols_lean
+                fepois <- .fepois_lean
+                feglm  <- .feglm_lean
                 eval(model)
             }
         }

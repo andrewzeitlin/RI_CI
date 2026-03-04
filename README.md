@@ -31,7 +31,7 @@ ri(df, model, tx, T0, id,
 | `stat` | `'t'` | Test statistic. `'t'` (default) = Chung–Romano studentised RI: the SE is re-estimated on every permutation, making the statistic approximately pivotal under the null. Requires `fit$se` (fixest) or `vcov()`. Use `cluster =` in the model to cluster at the randomisation unit. `'b'` = raw coefficient; faster, but equivalent in p-value to a fixed-denominator t (dividing all draws by a constant does not change ranks). Use `'b'` only when speed is critical and the SE is expected to be stable across permutations. Custom: `function(fit)` returning a numeric scalar (or vector if `length(tx) > 1`). |
 | `R` | `NULL` | Number of permutations to use. Defaults to all columns available in `T0`. Must not exceed the number of permutation columns. |
 | `n.cores` | `NULL` | Worker count. `NULL` = auto-detect (reads `SLURM_CPUS_PER_TASK` first, then `detectCores() - 1`). `1L` = serial (plain `lapply`, no overhead). |
-| `lean` | `TRUE` | When `TRUE` and `stat` is `'b'` or `'t'`, `ri()` injects `lean = TRUE` into any unqualified `feols()` call inside the model, suppressing allocation of the score matrix, fitted values, and residuals at fit-construction time. Set `FALSE` when using a custom `stat` function that needs model-matrix data, or when calling `fixest::feols()` with a namespace qualifier (which bypasses injection). |
+| `lean` | `TRUE` | When `TRUE` and `stat` is `'b'` or `'t'`, `ri()` injects `lean = TRUE` (and `nthreads = 1L` when `n.cores > 1`) into any unqualified `feols()`, `fepois()`, or `feglm()` call inside the model, suppressing allocation of large internal objects at fit-construction time and preventing CPU oversubscription when outer parallelism is active. Set `FALSE` when using a custom `stat` function that needs model-matrix data, or when calling estimators with a namespace qualifier (which bypasses injection). |
 
 ---
 
@@ -105,12 +105,18 @@ Two complementary optimisations apply automatically for `stat = 'b'` and `stat =
 (disabled for custom stat functions, which may need the full fit):
 
 **Pre-estimation injection (`lean = TRUE`, default):** `ri()` shadows any
-unqualified `feols()` call in the model with a wrapper that injects
-`lean = TRUE`, suppressing allocation of the score matrix, fitted values, and
-residuals at fit-construction time. When `stat = 'b'`, `only.coef = TRUE` is
-also injected, skipping SE computation entirely and returning a named numeric
-vector rather than a full fit object. Set `lean = FALSE` to disable both
-injections. Does not intercept `fixest::feols()` qualified calls.
+unqualified `feols()`, `fepois()`, or `feglm()` call in the model with a
+wrapper that injects:
+- `lean = TRUE` — suppresses allocation of the score matrix, fitted values, and
+  residuals at fit-construction time (the deeper saving; applies to all three estimators).
+- `only.coef = TRUE` — (`stat = 'b'` only) skips SE computation entirely,
+  returning a named numeric vector rather than a full fit object.
+- `nthreads = 1L` — (when `n.cores > 1`) disables within-estimator threading to
+  prevent CPU oversubscription when `ri()` is already dispatching across
+  permutations via `mclapply` / `parLapply`.
+
+Set `lean = FALSE` to disable all injections. Does not intercept
+namespace-qualified calls (`fixest::feols()`, `fixest::fepois()`, etc.).
 
 **Post-fit stripping (always active):** after each fit is returned, `ri()` also
 nulls the same large fields as a safety net, covering calls that used
@@ -191,7 +197,7 @@ result <- ri(..., R = 500L)
 K = 10 clusters, R = 400 permutations). Source `ri.R` first, then run it
 interactively. It requires `fixest`, `ggplot2`, and `tictoc`.
 
-The script walks through eight examples in sequence:
+The script walks through nine examples in sequence:
 
 | Example | What it demonstrates |
 |---|---|
@@ -203,6 +209,7 @@ The script walks through eight examples in sequence:
 | 6 | Null rejection rate over M = 200 outer draws; p-value distribution plot |
 | 7 | Two independent treatments; `T0` as a named list; joint F-stat |
 | 8 | Interaction `t*x`; only `t` in `T0`; interaction rebuilt by formula on each draw; Wald joint test |
+| 9 | Poisson QMLE (`fepois`) for a non-negative count outcome; comparison with `feols` on IHS; lean injection applies automatically |
 
 Each example is wrapped in `tictoc::tic()` / `toc()` so run times are printed
 alongside results.
