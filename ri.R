@@ -88,7 +88,7 @@ ri <- function(
             sum(is.na(idx)), id_col, txvar
         ))
         cols <- setdiff(names(tbl), id_col)
-        mat  <- as.matrix(tbl[idx, cols, drop = FALSE])
+        mat  <- as.matrix(as.data.frame(tbl)[idx, cols, drop = FALSE])
         storage.mode(mat) <- "integer"
         mat   # N x R_avail
     })
