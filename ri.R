@@ -145,9 +145,12 @@ ri <- function(
         #  Prefers fit$se (fixest; reflects any cluster= supplied in the model
         #  function) then falls back to sqrt(diag(vcov(fit))).  Use cluster= in
         #  the model when treatment is assigned at the cluster level.
-        se <- tryCatch(
-            fit$se[tx],                          # fixest: $se slot
-            error = function(e) tryCatch(
+        se <- tryCatch({
+            se_cand <- fit$se[tx]               # fixest: $se slot
+            if (is.null(se_cand) || length(se_cand) == 0L)
+                stop("no $se slot")
+            se_cand
+        }, error = function(e) tryCatch(
                 sqrt(diag(vcov(fit)))[tx],       # base lm / sandwich vcov
                 error = function(e2) rep(NA_real_, length(tx))
             )
