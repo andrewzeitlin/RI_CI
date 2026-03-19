@@ -91,7 +91,15 @@ ri <- function(
         ))
         cols <- setdiff(names(tbl), id_col)
         mat  <- as.matrix(as.data.frame(tbl)[idx, cols, drop = FALSE])
-        storage.mode(mat) <- "integer"
+        #  Coerce to integer only when the input is already integer or
+        #  logical (e.g. binary 0/1 treatment indicators).  Continuous
+        #  treatment variables (saturation rates, CF residuals, etc.)
+        #  must stay numeric to avoid truncation.
+        if (is.integer(mat) || is.logical(mat)) {
+            storage.mode(mat) <- "integer"
+        } else {
+            storage.mode(mat) <- "double"
+        }
         mat   # N x R_avail
     })
     names(T0_mats) <- names(T0)
